@@ -63,6 +63,8 @@ All pose estimation runs client-side in the browser using MediaPipe PoseLandmark
 | passcode | TEXT | Hashed 4-digit PIN (bcrypt), set at signup |
 | daily_target | INTEGER | Self-assigned, default 0 |
 | debt | INTEGER | Cumulative owed pushups, default 0 |
+| timezone | TEXT | IANA timezone, e.g. "America/New_York" |
+| next_day_boundary | TEXT | Next 7am local in UTC (ISO 8601) |
 | created_at | DATETIME | |
 
 ### pushup_logs
@@ -79,10 +81,18 @@ All pose estimation runs client-side in the browser using MediaPipe PoseLandmark
 
 Debt is stored as a column on `users`. Updated in two places:
 
-- **End of day:** A daily job checks each user's logs vs their target. If `SUM(logs) < daily_target`, the shortfall is added to `debt`.
+- **End of day:** A cron job runs every 15 minutes, checking `SELECT * FROM users WHERE next_day_boundary <= NOW()`. For matched users, if `SUM(logs for ended day) < daily_target`, the shortfall is added to `debt`. Then `next_day_boundary` is advanced to the next 7am in the user's IANA timezone.
 - **When pushups are logged:** If a user has debt > 0 and exceeds their daily target, the surplus reduces their debt.
 
 Simple, fast to query, no historical recomputation needed.
+
+### Timezone handling
+
+- **Day boundary:** Each user's "day" runs from 7am local to 7am local (not midnight).
+- **Storage:** IANA timezone string (e.g., `America/New_York`) + pre-computed `next_day_boundary` in UTC.
+- **Detection:** On app open, client reads `Intl.DateTimeFormat().resolvedOptions().timeZone` (no location permissions needed — reads OS timezone setting). If it differs from stored timezone, prompt: "Looks like you're in [new timezone]. Update?"
+- **On timezone change:** Server recalculates `next_day_boundary` to the next 7am in the new timezone. Current in-progress day may extend or shorten.
+- **DST:** Handled automatically by using IANA timezone IDs and a proper timezone library (Temporal or Luxon), never raw UTC offsets.
 
 ## Authentication
 
