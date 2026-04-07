@@ -154,7 +154,7 @@ function startNoobTracking(video, canvas, onCount, onDebug) {
       if (phase === 'ASCENDING') {
         const nTotal = nosePeakY - noseBaseY;
         if (noseReturn > nTotal * 0.6) {
-          count++; onCount(count);
+          count++; onCount(count); playTone(660, 0.1);
           log('COUNT', { n: count, noseDip: nTotal.toFixed(3), minElbow });
           phase = 'READY'; noseBaseY = nY; nosePeakY = nY; shoulderBaseY = sY; shoulderPeakY = sY; minElbow = 180; wristSamples = [];
         }
@@ -178,7 +178,7 @@ function startStandardTracking(video, canvas, onCount, onDebug) {
   const MIN_DIP = 0.03;
   const MIN_FRAMES = 15;
   const MAX_ANKLE_VAR = 0.06;
-  const MIN_KNEE_ANGLE = 150;
+  const MIN_KNEE_ANGLE = 120;
   const READY_FRAMES_NEEDED = 30;
   const LOST_FRAMES_THRESHOLD = 30;
 
@@ -355,7 +355,7 @@ function startStandardTracking(video, canvas, onCount, onDebug) {
       const totalDip = shoulderPeakY - shoulderBaseY;
       const returnAmt = shoulderPeakY - smoothedShoulderY;
       if (returnAmt > totalDip * 0.6) {
-        count++; onCount(count);
+        count++; onCount(count); playTone(660, 0.1);
         log('COUNT', { n: count, sDip: totalDip.toFixed(3) });
         phase = 'READY'; shoulderBaseY = smoothedShoulderY; shoulderPeakY = smoothedShoulderY; ankleYSamples = [];
       }
