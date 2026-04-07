@@ -240,16 +240,17 @@ function startStandardTracking(video, canvas, onCount, onDebug) {
         if (wristYSamples.length >= 3) { const m = wristYSamples.reduce((a,b)=>a+b,0)/wristYSamples.length; wVar = Math.sqrt(wristYSamples.reduce((s,v)=>s+(v-m)**2,0)/wristYSamples.length); }
         const hasWrist = wristYSamples.length >= 3;
 
-        // Differential ratio: shoulder must move way more than anchor point (ankle or wrist)
-        const anchorVar = hasAnkle ? aVar : (hasWrist ? wVar : 0);
+        // Differential ratio: shoulder must move way more than ankle (wrist moves too much during pushups to be a reliable anchor)
+        const anchorVar = hasAnkle ? aVar : 0;
         const diffRatio = anchorVar > 0.001 ? sDip / anchorVar : (sDip > MIN_SHOULDER_DIP ? 999 : 0);
 
         let reason = null;
         if (frames < MIN_DOWN_FRAMES) reason = 'too-fast';
         else if (sDip < MIN_SHOULDER_DIP) reason = 'no-shoulder-dip';
-        else if ((hasAnkle || hasWrist) && anchorVar > MAX_ANKLE_VAR) reason = 'camera-move';
-        else if ((hasAnkle || hasWrist) && diffRatio < MIN_DIFF_RATIO) reason = 'low-diff-ratio';
-        else if (!hasAnkle && !hasWrist && sDip < 0.08) reason = 'no-anchor-low-dip';
+        else if (hasAnkle && anchorVar > MAX_ANKLE_VAR) reason = 'camera-move';
+        else if (hasAnkle && diffRatio < MIN_DIFF_RATIO) reason = 'low-diff-ratio';
+        else if (!hasAnkle && !hasWrist) reason = 'no-reference-point';
+        else if (!hasAnkle && sDip < 0.08) reason = 'no-anchor-low-dip';
 
         if (reason) {
           log('REJECT', { reason, frames, sDip: sDip.toFixed(3), ankleVar: aVar.toFixed(4), wristVar: wVar.toFixed(4), diffRatio: diffRatio.toFixed(1), angle });
