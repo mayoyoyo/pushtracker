@@ -38,16 +38,16 @@ export function startTracking(video, canvas, onCount, onDebug) {
   let tracking = false;
   let frameNum = 0;
 
-  // Smoothing buffer for the tracking point's y-position
-  const yBuffer = [];
+  // Smoothing buffers
+  const noseYBuffer = [];
+  const shoulderYBuffer = [];
 
   // Peak detection state
-  // We're looking for: y goes UP (nose dips down toward floor) then comes back DOWN
-  // In normalized coords: y increases = going down, y decreases = coming up
   let phase = 'READY'; // READY -> DESCENDING -> ASCENDING (count!)
-  let peakY = 0;       // highest y seen during descent (lowest physical position)
-  let baselineY = 0;   // y when we started tracking / last UP position
-  let lastSmoothedY = 0;
+  let nosePeakY = 0;
+  let noseBaselineY = 0;
+  let shoulderBaselineY = 0;
+  let shoulderPeakY = 0;
 
   const eventLog = [];
   function logEvent(type, data) {
@@ -77,92 +77,101 @@ export function startTracking(video, canvas, onCount, onDebug) {
       drawingUtils.drawLandmarks(landmarks, { radius: 3, color: '#48bb78', fillColor: '#48bb78' });
       drawingUtils.drawConnectors(landmarks, PoseLandmarker.POSE_CONNECTIONS, { color: '#3182ce', lineWidth: 2 });
 
-      // Use nose (0) as primary tracking point, fall back to mid-shoulder
+      // Track both nose and shoulders
       const nose = landmarks[0];
       const lShoulder = landmarks[11];
       const rShoulder = landmarks[12];
+      const shoulderVis = Math.max(lShoulder.visibility, rShoulder.visibility);
 
-      // Pick the best tracking point based on visibility
-      let trackY, trackVis, trackLabel;
-      if (nose.visibility > MIN_VISIBILITY) {
-        trackY = nose.y;
-        trackVis = nose.visibility;
-        trackLabel = 'nose';
-      } else if (lShoulder.visibility > MIN_VISIBILITY || rShoulder.visibility > MIN_VISIBILITY) {
-        trackY = (lShoulder.y + rShoulder.y) / 2;
-        trackVis = Math.max(lShoulder.visibility, rShoulder.visibility);
-        trackLabel = 'shoulders';
-      } else {
-        if (onDebug) onDebug({ smoothY: 0, baselineY: 0, peakY: 0, dip: 0, phase, count, gated: 'low-vis', trackLabel: 'none' });
+      // Need at least shoulders visible
+      if (shoulderVis < MIN_VISIBILITY) {
+        if (onDebug) onDebug({ noseY: 0, shoulderY: 0, noseBase: 0, shoulderBase: 0, noseDip: 0, shoulderDip: 0, phase, count, gated: 'low-vis' });
         animationFrameId = requestAnimationFrame(processFrame);
         return;
       }
 
-      const smoothedY = smoothValue(yBuffer, trackY);
+      const rawShoulderY = (lShoulder.y + rShoulder.y) / 2;
+      const smoothedShoulderY = smoothValue(shoulderYBuffer, rawShoulderY);
 
-      // Initialize baseline on first good frame
-      if (baselineY === 0) {
-        baselineY = smoothedY;
-        peakY = smoothedY;
+      // Use nose if visible, otherwise just shoulders
+      const hasNose = nose.visibility > MIN_VISIBILITY;
+      const rawNoseY = hasNose ? nose.y : rawShoulderY;
+      const smoothedNoseY = smoothValue(noseYBuffer, rawNoseY);
+
+      // Initialize baselines
+      if (noseBaselineY === 0) {
+        noseBaselineY = smoothedNoseY;
+        nosePeakY = smoothedNoseY;
+        shoulderBaselineY = smoothedShoulderY;
+        shoulderPeakY = smoothedShoulderY;
       }
 
-      const dip = smoothedY - baselineY; // positive = moved down, negative = moved up
-      const dipFromPeak = peakY - smoothedY; // positive = moving back up from lowest point
+      const noseDip = smoothedNoseY - noseBaselineY;
+      const shoulderDip = smoothedShoulderY - shoulderBaselineY;
+      const noseDipFromPeak = nosePeakY - smoothedNoseY;
 
       if (onDebug) {
         onDebug({
-          smoothY: smoothedY.toFixed(3),
-          baselineY: baselineY.toFixed(3),
-          peakY: peakY.toFixed(3),
-          dip: dip.toFixed(3),
+          noseY: smoothedNoseY.toFixed(3),
+          shoulderY: smoothedShoulderY.toFixed(3),
+          noseBase: noseBaselineY.toFixed(3),
+          shoulderBase: shoulderBaselineY.toFixed(3),
+          noseDip: noseDip.toFixed(3),
+          shoulderDip: shoulderDip.toFixed(3),
           phase,
           count,
           gated: 'active',
-          trackLabel,
-          vis: trackVis.toFixed(2),
+          hasNose,
         });
       }
 
-      // Phase state machine:
-      // READY: waiting for user to start going down
-      // DESCENDING: user is going down (y increasing)
-      // ASCENDING: user is coming back up — once they return near baseline, count it
-
+      // Phase state machine — requires BOTH nose and shoulders to move
       if (phase === 'READY') {
-        baselineY = smoothedY * 0.05 + baselineY * 0.95; // slowly adapt baseline
-        if (dip > MIN_DIP_AMPLITUDE * 0.5) {
+        noseBaselineY = smoothedNoseY * 0.05 + noseBaselineY * 0.95;
+        shoulderBaselineY = smoothedShoulderY * 0.05 + shoulderBaselineY * 0.95;
+        if (noseDip > MIN_DIP_AMPLITUDE * 0.5) {
           phase = 'DESCENDING';
-          peakY = smoothedY;
-          logEvent('DESCEND_START', { y: smoothedY.toFixed(3), baseline: baselineY.toFixed(3) });
+          nosePeakY = smoothedNoseY;
+          shoulderPeakY = smoothedShoulderY;
+          logEvent('DESCEND', { nY: smoothedNoseY.toFixed(3), sY: smoothedShoulderY.toFixed(3) });
         }
       }
 
       if (phase === 'DESCENDING') {
-        if (smoothedY > peakY) {
-          peakY = smoothedY; // track the lowest point
-        }
-        // They've gone down enough and now started coming back up
-        if (dipFromPeak > MIN_DIP_AMPLITUDE * 0.3 && (peakY - baselineY) > MIN_DIP_AMPLITUDE) {
-          phase = 'ASCENDING';
-          logEvent('ASCENDING', { peakY: peakY.toFixed(3), dipFromPeak: dipFromPeak.toFixed(3) });
+        if (smoothedNoseY > nosePeakY) nosePeakY = smoothedNoseY;
+        if (smoothedShoulderY > shoulderPeakY) shoulderPeakY = smoothedShoulderY;
+
+        const noseTotalDip = nosePeakY - noseBaselineY;
+        if (noseDipFromPeak > MIN_DIP_AMPLITUDE * 0.3 && noseTotalDip > MIN_DIP_AMPLITUDE) {
+          // Check shoulders also moved — this is the anti-nod check
+          const shoulderTotalDip = shoulderPeakY - shoulderBaselineY;
+          if (shoulderTotalDip > MIN_DIP_AMPLITUDE * 0.5) {
+            phase = 'ASCENDING';
+            logEvent('ASCEND', { noseDip: noseTotalDip.toFixed(3), shoulderDip: shoulderTotalDip.toFixed(3) });
+          } else {
+            // Nose moved but shoulders didn't — head nod, reset
+            phase = 'READY';
+            noseBaselineY = smoothedNoseY;
+            nosePeakY = smoothedNoseY;
+            logEvent('NOD_REJECT', { noseDip: noseTotalDip.toFixed(3), shoulderDip: shoulderTotalDip.toFixed(3) });
+          }
         }
       }
 
       if (phase === 'ASCENDING') {
-        // Count when they've returned close to baseline (within 40% of the dip)
-        const totalDip = peakY - baselineY;
-        const returnAmount = peakY - smoothedY;
-        if (returnAmount > totalDip * 0.6) {
+        const noseTotalDip = nosePeakY - noseBaselineY;
+        const noseReturn = nosePeakY - smoothedNoseY;
+        if (noseReturn > noseTotalDip * 0.6) {
           count++;
           onCount(count);
-          logEvent('COUNT', { n: count, y: smoothedY.toFixed(3), totalDip: totalDip.toFixed(3) });
+          logEvent('COUNT', { n: count, noseDip: noseTotalDip.toFixed(3) });
           phase = 'READY';
-          baselineY = smoothedY; // reset baseline to current position
-          peakY = smoothedY;
+          noseBaselineY = smoothedNoseY;
+          nosePeakY = smoothedNoseY;
+          shoulderBaselineY = smoothedShoulderY;
+          shoulderPeakY = smoothedShoulderY;
         }
       }
-
-      lastSmoothedY = smoothedY;
     } else {
       tracking = false;
       if (onDebug) onDebug({ smoothY: 0, baselineY: 0, peakY: 0, dip: 0, phase, count, gated: 'no-pose', trackLabel: 'none' });

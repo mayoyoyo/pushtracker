@@ -373,11 +373,11 @@ async function renderCamera(app) {
           <div class="tracking-badge hidden" id="cam-tracking">TRACKING</div>
         </div>
         <div id="cam-debug-panel" style="background:rgba(0,0,0,0.85);padding:8px 12px;font-family:monospace;font-size:11px;line-height:1.6;color:#e2e8f0">
-          <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:4px">
-            <span>tracking: <strong id="d-track" style="color:#48bb78">--</strong></span>
-            <span>y: <strong id="d-y" style="color:#ecc94b">--</strong></span>
-            <span>base: <strong id="d-base" style="color:#718096">--</strong></span>
-            <span>dip: <strong id="d-dip" style="color:#63b3ed">--</strong></span>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:4px">
+            <span>nose: <strong id="d-nose" style="color:#ecc94b">--</strong></span>
+            <span>shld: <strong id="d-shld" style="color:#63b3ed">--</strong></span>
+            <span>nDip: <strong id="d-ndip" style="color:#ecc94b">--</strong></span>
+            <span>sDip: <strong id="d-sdip" style="color:#63b3ed">--</strong></span>
           </div>
           <div style="display:flex;gap:12px;align-items:center">
             <span>phase: <strong id="d-phase" style="color:#48bb78">--</strong></span>
@@ -424,23 +424,21 @@ async function renderCamera(app) {
       tracker = pose.startTracking(video, canvas, (count) => {
         countEl.textContent = count;
       }, (d) => {
-        // Update debug panel with front-facing signals
-        document.getElementById('d-track').textContent = d.trackLabel;
-        document.getElementById('d-y').textContent = d.smoothY;
-        document.getElementById('d-base').textContent = d.baselineY;
-        document.getElementById('d-dip').textContent = d.dip;
+        document.getElementById('d-nose').textContent = d.noseY;
+        document.getElementById('d-shld').textContent = d.shoulderY;
+        document.getElementById('d-ndip').textContent = d.noseDip;
+        document.getElementById('d-sdip').textContent = d.shoulderDip;
         document.getElementById('d-phase').textContent = d.phase;
         document.getElementById('d-phase').style.color = d.phase === 'DESCENDING' ? '#fc8181' : d.phase === 'ASCENDING' ? '#ecc94b' : '#48bb78';
         document.getElementById('d-gate').textContent = d.gated;
         document.getElementById('d-gate').style.color = d.gated === 'active' ? '#48bb78' : '#fc8181';
         document.getElementById('d-count').textContent = d.count;
-        // Y position bar (shows baseline, peak, and current position)
-        const yNum = parseFloat(d.smoothY) || 0;
-        const baseNum = parseFloat(d.baselineY) || 0;
-        const peakNum = parseFloat(d.peakY) || 0;
-        document.getElementById('d-bar-y').style.left = (yNum * 100) + '%';
-        document.getElementById('d-bar-base').style.left = (baseNum * 100) + '%';
-        document.getElementById('d-bar-peak').style.left = (peakNum * 100) + '%';
+        const noseNum = parseFloat(d.noseY) || 0;
+        const noseBase = parseFloat(d.noseBase) || 0;
+        const shldNum = parseFloat(d.shoulderY) || 0;
+        document.getElementById('d-bar-y').style.left = (noseNum * 100) + '%';
+        document.getElementById('d-bar-base').style.left = (noseBase * 100) + '%';
+        document.getElementById('d-bar-peak').style.left = (shldNum * 100) + '%';
       });
 
       trackingInterval = setInterval(() => {
