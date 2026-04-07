@@ -160,19 +160,16 @@ function startStandardTracking(video, canvas, onCount, onDebug) {
   let count = 0, tracking = false, frameNum = 0;
   const elbowBuf = [], shoulderYBuf = [];
 
-  const UP_ANGLE = 145, DOWN_ANGLE = 110; // loosened for varying camera angles
-  const MAX_HIP_KNEE_PROXIMITY = 0.08;
-  const MIN_DOWN_FRAMES = 20; // ~0.67s at 30fps
-  const MIN_SHOULDER_DIP = 0.03; // shoulder must visibly drop
-  const MIN_SHOULDER_DIP_NO_ANKLE = 0.06; // stricter when no ankle data (can't detect camera jiggle)
-  const MAX_ANKLE_MOVEMENT = 0.02;
-  const MIN_PLANK_ANGLE = 140;
+  const UP_ANGLE = 145, DOWN_ANGLE = 110;
+  const MIN_DOWN_FRAMES = 20;
+  const MIN_SHOULDER_DIP = 0.03;
+  const MAX_ANKLE_VAR = 0.06; // loosened — real pushups have 0.008-0.05 ankle movement
+  const MIN_DIFF_RATIO = 2.0; // shoulder must move at least 2x more than ankle
   let state = 'UP';
-  let kneelingFrames = 0, totalLBFrames = 0;
   let descentStartFrame = 0;
-  let shoulderYAtDown = 0, shoulderPeakY = 0; // track shoulder dip during DOWN
-  let ankleYSamples = []; // track ankle stability
-  let plankAngleSamples = []; // track body alignment
+  let shoulderYAtDown = 0, shoulderPeakY = 0;
+  let ankleYSamples = [];
+  let wristYSamples = []; // fallback check when no ankle visible
 
   const eventLog = [];
   function log(type, data) { eventLog.push({ t: (performance.now()/1000).toFixed(2), frame: frameNum, type, ...data }); if (eventLog.length > 200) eventLog.shift(); }
@@ -203,45 +200,21 @@ function startStandardTracking(video, canvas, onCount, onDebug) {
       const angle = Math.round(smoothValue(elbowBuf, rawAngle));
       const smoothedShoulderY = smoothValue(shoulderYBuf, side.shoulder.y);
 
-      // Plank angle: shoulder-hip-ankle (should be ~180 for straight body)
-      let plankAngle = '--';
-      if (side.hip.visibility > MIN_VISIBILITY && side.ankle.visibility > MIN_VISIBILITY) {
-        plankAngle = Math.round(calculateAngle(side.shoulder, side.hip, side.ankle));
-      }
-
       // Track data during DOWN phase
       if (state === 'DOWN') {
-        // Shoulder dip
         if (smoothedShoulderY > shoulderPeakY) shoulderPeakY = smoothedShoulderY;
-
-        // Ankle stability
         if (side.ankle.visibility > MIN_VISIBILITY) ankleYSamples.push(side.ankle.y);
-
-        // Plank angle samples
-        if (typeof plankAngle === 'number') plankAngleSamples.push(plankAngle);
-
-        // Kneeling detection
-        if (side.hip.visibility > MIN_VISIBILITY && side.knee.visibility > MIN_VISIBILITY) {
-          totalLBFrames++;
-          if (Math.abs(side.hip.y - side.knee.y) < MAX_HIP_KNEE_PROXIMITY) kneelingFrames++;
-        }
+        if (side.wrist.visibility > MIN_VISIBILITY) wristYSamples.push(side.wrist.y);
       }
 
-      const kneelingRatio = totalLBFrames > 0 ? kneelingFrames / totalLBFrames : 0;
       const shoulderDip = shoulderPeakY - shoulderYAtDown;
 
-      // Ankle variance (live)
-      let ankleVar = '--';
-      if (ankleYSamples.length >= 3) {
-        const m = ankleYSamples.reduce((a,b)=>a+b,0)/ankleYSamples.length;
-        ankleVar = Math.sqrt(ankleYSamples.reduce((s,v)=>s+(v-m)**2,0)/ankleYSamples.length).toFixed(4);
-      }
+      // Live stats for debug
+      let ankleVar = '--', wristVar = '--';
+      if (ankleYSamples.length >= 3) { const m = ankleYSamples.reduce((a,b)=>a+b,0)/ankleYSamples.length; ankleVar = Math.sqrt(ankleYSamples.reduce((s,v)=>s+(v-m)**2,0)/ankleYSamples.length).toFixed(4); }
+      if (wristYSamples.length >= 3) { const m = wristYSamples.reduce((a,b)=>a+b,0)/wristYSamples.length; wristVar = Math.sqrt(wristYSamples.reduce((s,v)=>s+(v-m)**2,0)/wristYSamples.length).toFixed(4); }
 
-      // Average plank angle
-      let avgPlank = '--';
-      if (plankAngleSamples.length > 0) avgPlank = Math.round(plankAngleSamples.reduce((a,b)=>a+b,0)/plankAngleSamples.length);
-
-      if (onDebug) onDebug({ angle, sDip: state === 'DOWN' ? shoulderDip.toFixed(3) : '--', ankleVar, plank: avgPlank, kneel: kneelingRatio.toFixed(2), state, count, gated: 'active', mode: 'STANDARD' });
+      if (onDebug) onDebug({ angle, sDip: state === 'DOWN' ? shoulderDip.toFixed(3) : '--', ankleVar, wristVar, state, count, gated: 'active', mode: 'STANDARD' });
 
       if (angle < DOWN_ANGLE && state === 'UP') {
         state = 'DOWN';
@@ -249,45 +222,42 @@ function startStandardTracking(video, canvas, onCount, onDebug) {
         shoulderYAtDown = smoothedShoulderY;
         shoulderPeakY = smoothedShoulderY;
         ankleYSamples = [];
-        plankAngleSamples = [];
-        kneelingFrames = 0; totalLBFrames = 0;
+        wristYSamples = [];
         log('DOWN', { angle, shoulderY: smoothedShoulderY.toFixed(3) });
       }
 
       if (angle > UP_ANGLE && state === 'DOWN') {
         const frames = frameNum - descentStartFrame;
-
-        // Compute all checks
         const sDip = shoulderPeakY - shoulderYAtDown;
-        let aVar = 0;
-        if (ankleYSamples.length >= 3) {
-          const m = ankleYSamples.reduce((a,b)=>a+b,0)/ankleYSamples.length;
-          aVar = Math.sqrt(ankleYSamples.reduce((s,v)=>s+(v-m)**2,0)/ankleYSamples.length);
-        }
-        const hasAnkle = ankleYSamples.length >= 3;
-        const aPlank = plankAngleSamples.length > 0 ? plankAngleSamples.reduce((a,b)=>a+b,0)/plankAngleSamples.length : 999;
-        const hasPlank = plankAngleSamples.length > 0;
-        const kr = totalLBFrames > 0 ? kneelingFrames / totalLBFrames : 0;
 
-        // Determine pass/fail
-        // When no ankle data, use stricter shoulder dip to compensate
-        const reqDip = hasAnkle ? MIN_SHOULDER_DIP : MIN_SHOULDER_DIP_NO_ANKLE;
+        // Ankle variance
+        let aVar = 0;
+        if (ankleYSamples.length >= 3) { const m = ankleYSamples.reduce((a,b)=>a+b,0)/ankleYSamples.length; aVar = Math.sqrt(ankleYSamples.reduce((s,v)=>s+(v-m)**2,0)/ankleYSamples.length); }
+        const hasAnkle = ankleYSamples.length >= 3;
+
+        // Wrist variance (fallback when no ankle)
+        let wVar = 0;
+        if (wristYSamples.length >= 3) { const m = wristYSamples.reduce((a,b)=>a+b,0)/wristYSamples.length; wVar = Math.sqrt(wristYSamples.reduce((s,v)=>s+(v-m)**2,0)/wristYSamples.length); }
+        const hasWrist = wristYSamples.length >= 3;
+
+        // Differential ratio: shoulder must move way more than anchor point (ankle or wrist)
+        const anchorVar = hasAnkle ? aVar : (hasWrist ? wVar : 0);
+        const diffRatio = anchorVar > 0.001 ? sDip / anchorVar : (sDip > MIN_SHOULDER_DIP ? 999 : 0);
 
         let reason = null;
         if (frames < MIN_DOWN_FRAMES) reason = 'too-fast';
-        else if (hasAnkle && aVar > MAX_ANKLE_MOVEMENT) reason = 'camera-move';
-        else if (sDip < reqDip) reason = 'no-shoulder-dip';
-        else if (hasPlank && aPlank < MIN_PLANK_ANGLE) reason = 'not-plank';
-        else if (kr > 0.5) reason = 'kneeling';
+        else if (sDip < MIN_SHOULDER_DIP) reason = 'no-shoulder-dip';
+        else if ((hasAnkle || hasWrist) && anchorVar > MAX_ANKLE_VAR) reason = 'camera-move';
+        else if ((hasAnkle || hasWrist) && diffRatio < MIN_DIFF_RATIO) reason = 'low-diff-ratio';
+        else if (!hasAnkle && !hasWrist && sDip < 0.08) reason = 'no-anchor-low-dip';
 
         if (reason) {
-          log('REJECT', { reason, frames, sDip: sDip.toFixed(3), ankleVar: aVar.toFixed(4), plank: hasPlank ? Math.round(aPlank) : '--', kneel: kr.toFixed(2), angle });
+          log('REJECT', { reason, frames, sDip: sDip.toFixed(3), ankleVar: aVar.toFixed(4), wristVar: wVar.toFixed(4), diffRatio: diffRatio.toFixed(1), angle });
         } else {
           count++; onCount(count);
-          log('COUNT', { n: count, frames, sDip: sDip.toFixed(3), ankleVar: aVar.toFixed(4), plank: hasPlank ? Math.round(aPlank) : '--', kneel: kr.toFixed(2), angle });
+          log('COUNT', { n: count, frames, sDip: sDip.toFixed(3), ankleVar: aVar.toFixed(4), wristVar: wVar.toFixed(4), diffRatio: diffRatio.toFixed(1), angle });
         }
         state = 'UP';
-        kneelingFrames = 0; totalLBFrames = 0;
       }
     } else { tracking = false; if (onDebug) onDebug({ state, count, gated: 'no-pose', mode: 'STANDARD' }); }
     animationFrameId = requestAnimationFrame(processFrame);
