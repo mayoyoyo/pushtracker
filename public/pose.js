@@ -5,6 +5,7 @@ let animationFrameId = null;
 
 const UP_ANGLE = 160;
 const DOWN_ANGLE = 90;
+const MIN_VISIBILITY = 0.6;
 
 export async function initPoseDetection() {
   if (poseLandmarker) return poseLandmarker;
@@ -33,9 +34,22 @@ function pickVisibleSide(landmarks) {
   const leftVis = (landmarks[11].visibility + landmarks[13].visibility + landmarks[15].visibility) / 3;
   const rightVis = (landmarks[12].visibility + landmarks[14].visibility + landmarks[16].visibility) / 3;
   if (leftVis >= rightVis) {
-    return { shoulder: landmarks[11], elbow: landmarks[13], wrist: landmarks[15] };
+    return { shoulder: landmarks[11], elbow: landmarks[13], wrist: landmarks[15], hip: landmarks[23], visibility: leftVis };
   }
-  return { shoulder: landmarks[12], elbow: landmarks[14], wrist: landmarks[16] };
+  return { shoulder: landmarks[12], elbow: landmarks[14], wrist: landmarks[16], hip: landmarks[24], visibility: rightVis };
+}
+
+function isInPushupPosition(shoulder, wrist, hip) {
+  // In a pushup, the body is roughly horizontal:
+  // 1. Wrists should be near or below shoulder height (y increases downward in image)
+  const wristBelowShoulder = wrist.y >= shoulder.y - 0.1;
+  // 2. Shoulders and hips should be at roughly similar height (body is horizontal, not upright)
+  //    Allow some tolerance — abs(shoulder.y - hip.y) should be small relative to frame
+  const bodyHorizontal = Math.abs(shoulder.y - hip.y) < 0.35;
+  // 3. The person shouldn't be standing upright — shoulder should not be far above hip
+  //    In an upright position, shoulder.y << hip.y (shoulder much higher)
+  const notUpright = (hip.y - shoulder.y) < 0.4;
+  return wristBelowShoulder && bodyHorizontal && notUpright;
 }
 
 export function startTracking(video, canvas, onCount) {
@@ -65,7 +79,20 @@ export function startTracking(video, canvas, onCount) {
       drawingUtils.drawLandmarks(landmarks, { radius: 3, color: '#48bb78', fillColor: '#48bb78' });
       drawingUtils.drawConnectors(landmarks, PoseLandmarker.POSE_CONNECTIONS, { color: '#3182ce', lineWidth: 2 });
 
-      const { shoulder, elbow, wrist } = pickVisibleSide(landmarks);
+      const { shoulder, elbow, wrist, hip, visibility } = pickVisibleSide(landmarks);
+
+      // Skip frame if landmarks aren't confident enough
+      if (visibility < MIN_VISIBILITY) {
+        animationFrameId = requestAnimationFrame(processFrame);
+        return;
+      }
+
+      // Only count if the person is actually in a pushup position
+      if (!isInPushupPosition(shoulder, wrist, hip)) {
+        animationFrameId = requestAnimationFrame(processFrame);
+        return;
+      }
+
       const angle = calculateAngle(shoulder, elbow, wrist);
 
       if (angle < DOWN_ANGLE && state === 'UP') {
