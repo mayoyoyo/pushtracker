@@ -289,72 +289,60 @@ function showTutorial(onStart) {
         <h2 style="text-align:center;margin-bottom:16px">Camera Setup</h2>
 
         <div style="margin-bottom:20px">
-          <svg viewBox="0 0 400 240" style="width:100%;border-radius:10px;background:#1a1a2e">
+          <svg viewBox="0 0 400 280" style="width:100%;border-radius:10px;background:#1a1a2e">
             <!-- Floor line -->
-            <line x1="20" y1="200" x2="380" y2="200" stroke="#4a5568" stroke-width="2"/>
+            <line x1="20" y1="240" x2="380" y2="240" stroke="#4a5568" stroke-width="2"/>
 
-            <!-- Person in pushup UP position -->
-            <!-- Head -->
-            <circle cx="100" cy="130" r="14" fill="#48bb78" opacity="0.3"/>
-            <circle cx="100" cy="130" r="14" stroke="#48bb78" stroke-width="2" fill="none"/>
-            <!-- Torso (shoulder to hip) -->
-            <line x1="120" y1="140" x2="250" y2="155" stroke="#3182ce" stroke-width="3"/>
-            <!-- Upper arm (shoulder to elbow) -->
-            <line x1="120" y1="140" x2="110" y2="175" stroke="#3182ce" stroke-width="3"/>
-            <!-- Forearm (elbow to wrist/ground) -->
-            <line x1="110" y1="175" x2="110" y2="200" stroke="#3182ce" stroke-width="3"/>
-            <!-- Legs -->
-            <line x1="250" y1="155" x2="340" y2="175" stroke="#3182ce" stroke-width="3"/>
-            <line x1="340" y1="175" x2="360" y2="200" stroke="#3182ce" stroke-width="3"/>
+            <!-- Phone/laptop on floor facing user -->
+            <rect x="170" y="210" width="60" height="30" rx="4" fill="none" stroke="#718096" stroke-width="2"/>
+            <circle cx="200" cy="218" r="4" fill="#718096"/>
+            <text x="172" y="255" fill="#718096" font-size="10">Your phone</text>
+            <!-- Camera view cone -->
+            <path d="M 200 215 L 130 100 L 270 100" stroke="#718096" stroke-width="1" fill="#718096" opacity="0.06"/>
+
+            <!-- Person UP position (facing camera) -->
+            <circle cx="200" cy="115" r="16" fill="#48bb78" opacity="0.3"/>
+            <circle cx="200" cy="115" r="16" stroke="#48bb78" stroke-width="2" fill="none"/>
+            <!-- Shoulders -->
+            <line x1="170" y1="138" x2="230" y2="138" stroke="#3182ce" stroke-width="3"/>
+            <!-- Arms going down -->
+            <line x1="170" y1="138" x2="155" y2="175" stroke="#3182ce" stroke-width="2"/>
+            <line x1="230" y1="138" x2="245" y2="175" stroke="#3182ce" stroke-width="2"/>
             <!-- Joints -->
-            <circle cx="120" cy="140" r="5" fill="#48bb78"/>
-            <circle cx="110" cy="175" r="5" fill="#48bb78"/>
-            <circle cx="110" cy="200" r="5" fill="#48bb78"/>
-            <circle cx="250" cy="155" r="5" fill="#48bb78"/>
-            <circle cx="340" cy="175" r="5" fill="#48bb78"/>
-            <circle cx="360" cy="200" r="5" fill="#48bb78"/>
-            <!-- Label UP -->
-            <text x="85" y="115" fill="#48bb78" font-size="14" font-weight="bold">UP</text>
+            <circle cx="170" cy="138" r="4" fill="#48bb78"/>
+            <circle cx="230" cy="138" r="4" fill="#48bb78"/>
+            <text x="255" y="125" fill="#48bb78" font-size="13" font-weight="bold">UP</text>
 
-            <!-- Person in pushup DOWN position (ghosted) -->
-            <!-- Head -->
-            <circle cx="100" cy="175" r="14" fill="#fc8181" opacity="0.15"/>
-            <circle cx="100" cy="175" r="14" stroke="#fc8181" stroke-width="2" fill="none" opacity="0.5" stroke-dasharray="4"/>
-            <!-- Torso -->
-            <line x1="115" y1="180" x2="250" y2="170" stroke="#fc8181" stroke-width="2" opacity="0.4" stroke-dasharray="4"/>
-            <!-- Upper arm -->
-            <line x1="115" y1="180" x2="135" y2="195" stroke="#fc8181" stroke-width="2" opacity="0.4" stroke-dasharray="4"/>
-            <!-- Forearm -->
-            <line x1="135" y1="195" x2="110" y2="200" stroke="#fc8181" stroke-width="2" opacity="0.4" stroke-dasharray="4"/>
-            <!-- Label DOWN -->
-            <text x="75" y="170" fill="#fc8181" font-size="14" font-weight="bold" opacity="0.6">DOWN</text>
+            <!-- Person DOWN position (closer to camera = lower + bigger) -->
+            <circle cx="200" cy="160" r="18" fill="#fc8181" opacity="0.1"/>
+            <circle cx="200" cy="160" r="18" stroke="#fc8181" stroke-width="2" fill="none" opacity="0.4" stroke-dasharray="4"/>
+            <line x1="160" y1="185" x2="240" y2="185" stroke="#fc8181" stroke-width="2" opacity="0.3" stroke-dasharray="4"/>
+            <text x="255" y="168" fill="#fc8181" font-size="13" font-weight="bold" opacity="0.5">DOWN</text>
 
-            <!-- Arrow showing motion -->
-            <path d="M 75 125 Q 60 150 75 170" stroke="#ecc94b" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+            <!-- Arrow showing vertical motion -->
+            <path d="M 140 120 L 140 165" stroke="#ecc94b" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+            <path d="M 135 165 L 135 120" stroke="#ecc94b" stroke-width="2" fill="none" marker-end="url(#arrow)" opacity="0.5"/>
             <defs><marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#ecc94b"/></marker></defs>
 
-            <!-- Phone/laptop icon -->
-            <rect x="15" y="55" width="35" height="50" rx="4" fill="none" stroke="#718096" stroke-width="2"/>
-            <circle cx="32" cy="68" r="4" fill="#718096"/>
-            <line x1="32" y1="78" x2="32" y2="95" stroke="#718096" stroke-width="1" stroke-dasharray="2"/>
-            <text x="10" y="48" fill="#718096" font-size="11">Camera</text>
+            <text x="80" y="80" fill="#e2e8f0" font-size="12" opacity="0.5">Camera sees you</text>
+            <text x="80" y="95" fill="#e2e8f0" font-size="12" opacity="0.5">move up and down</text>
           </svg>
         </div>
 
         <div style="background:var(--surface);border-radius:10px;padding:16px;margin-bottom:16px">
-          <div style="font-weight:600;margin-bottom:10px">Best setup:</div>
+          <div style="font-weight:600;margin-bottom:10px">Setup:</div>
           <ul style="padding-left:18px;line-height:1.8;font-size:14px;color:var(--text-dim)">
-            <li><strong style="color:var(--text)">Side view works best</strong> -- place phone/laptop to your side</li>
-            <li><strong style="color:var(--text)">Show your full upper body</strong> -- shoulders, elbows, and wrists visible</li>
-            <li><strong style="color:var(--text)">Stable surface</strong> -- don't move the camera during your set</li>
-            <li><strong style="color:var(--text)">Good lighting</strong> -- face a light source, avoid backlighting</li>
+            <li><strong style="color:var(--text)">Face the camera</strong> -- place phone/laptop on the floor in front of you, screen facing up</li>
+            <li><strong style="color:var(--text)">Camera sees your face + shoulders</strong> -- that's all it needs</li>
+            <li><strong style="color:var(--text)">Stable surface</strong> -- don't bump the camera during your set</li>
+            <li><strong style="color:var(--text)">Good lighting</strong> -- overhead or side lighting works best</li>
           </ul>
         </div>
 
         <div style="background:var(--surface);border-radius:10px;padding:16px;margin-bottom:20px">
           <div style="font-weight:600;margin-bottom:10px">How it works:</div>
           <p style="font-size:14px;color:var(--text-dim);line-height:1.6">
-            The AI tracks your shoulder and elbow movement. It counts a rep when your elbows bend past 100 degrees (down) and extend past 150 degrees (up). Your shoulders need to visibly move -- just bending elbows while sitting won't count.
+            The AI tracks your nose/shoulders. As you go down, they move lower in the frame. As you push up, they rise. Each full dip-and-return = 1 pushup. No special angle needed -- just go down and come back up.
           </p>
         </div>
 
@@ -386,26 +374,24 @@ async function renderCamera(app) {
         </div>
         <div id="cam-debug-panel" style="background:rgba(0,0,0,0.85);padding:8px 12px;font-family:monospace;font-size:11px;line-height:1.6;color:#e2e8f0">
           <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:4px">
-            <span>angle: <strong id="d-angle" style="color:#48bb78">--</strong></span>
-            <span>raw: <strong id="d-raw" style="color:#718096">--</strong></span>
-            <span>shY: <strong id="d-sy" style="color:#ecc94b">--</strong></span>
-            <span>amp: <strong id="d-amp" style="color:#63b3ed">--</strong></span>
-            <span>vis: <strong id="d-vis" style="color:#718096">--</strong></span>
+            <span>tracking: <strong id="d-track" style="color:#48bb78">--</strong></span>
+            <span>y: <strong id="d-y" style="color:#ecc94b">--</strong></span>
+            <span>base: <strong id="d-base" style="color:#718096">--</strong></span>
+            <span>dip: <strong id="d-dip" style="color:#63b3ed">--</strong></span>
           </div>
           <div style="display:flex;gap:12px;align-items:center">
-            <span>state: <strong id="d-state" style="color:#48bb78">--</strong></span>
+            <span>phase: <strong id="d-phase" style="color:#48bb78">--</strong></span>
             <span>gate: <strong id="d-gate" style="color:#fc8181">--</strong></span>
             <span>count: <strong id="d-count" style="color:#fff;font-size:14px">0</strong></span>
           </div>
           <div style="margin-top:4px">
             <div style="display:flex;align-items:center;gap:6px">
-              <span style="font-size:10px;width:30px">angle</span>
-              <div style="flex:1;height:10px;background:#2d3748;border-radius:3px;position:relative;overflow:hidden">
-                <div id="d-bar" style="position:absolute;left:0;top:0;height:100%;width:0;background:#48bb78;transition:width 0.1s"></div>
-                <div style="position:absolute;left:55.5%;top:0;width:1px;height:100%;background:#fc8181" title="DOWN < 100"></div>
-                <div style="position:absolute;left:83.3%;top:0;width:1px;height:100%;background:#48bb78" title="UP > 150"></div>
+              <span style="font-size:10px;width:18px">y</span>
+              <div style="flex:1;height:12px;background:#2d3748;border-radius:3px;position:relative;overflow:hidden">
+                <div id="d-bar-base" style="position:absolute;top:0;width:2px;height:100%;background:#718096" title="baseline"></div>
+                <div id="d-bar-peak" style="position:absolute;top:0;width:2px;height:100%;background:#fc8181" title="peak (lowest)"></div>
+                <div id="d-bar-y" style="position:absolute;top:0;width:4px;height:100%;background:#48bb78;border-radius:2px" title="current y"></div>
               </div>
-              <span style="font-size:9px;color:#718096">180</span>
             </div>
           </div>
         </div>
@@ -438,21 +424,23 @@ async function renderCamera(app) {
       tracker = pose.startTracking(video, canvas, (count) => {
         countEl.textContent = count;
       }, (d) => {
-        // Update debug panel
-        document.getElementById('d-angle').textContent = d.smoothAngle;
-        document.getElementById('d-raw').textContent = d.rawAngle;
-        document.getElementById('d-sy').textContent = d.shoulderY;
-        document.getElementById('d-amp').textContent = d.amplitude;
-        document.getElementById('d-vis').textContent = d.vis;
-        document.getElementById('d-state').textContent = d.state;
-        document.getElementById('d-state').style.color = d.state === 'DOWN' ? '#fc8181' : '#48bb78';
+        // Update debug panel with front-facing signals
+        document.getElementById('d-track').textContent = d.trackLabel;
+        document.getElementById('d-y').textContent = d.smoothY;
+        document.getElementById('d-base').textContent = d.baselineY;
+        document.getElementById('d-dip').textContent = d.dip;
+        document.getElementById('d-phase').textContent = d.phase;
+        document.getElementById('d-phase').style.color = d.phase === 'DESCENDING' ? '#fc8181' : d.phase === 'ASCENDING' ? '#ecc94b' : '#48bb78';
         document.getElementById('d-gate').textContent = d.gated;
         document.getElementById('d-gate').style.color = d.gated === 'active' ? '#48bb78' : '#fc8181';
         document.getElementById('d-count').textContent = d.count;
-        // Angle bar (0-180 range)
-        const pct = Math.min(100, (d.smoothAngle / 180) * 100);
-        document.getElementById('d-bar').style.width = pct + '%';
-        document.getElementById('d-bar').style.background = d.state === 'DOWN' ? '#fc8181' : '#48bb78';
+        // Y position bar (shows baseline, peak, and current position)
+        const yNum = parseFloat(d.smoothY) || 0;
+        const baseNum = parseFloat(d.baselineY) || 0;
+        const peakNum = parseFloat(d.peakY) || 0;
+        document.getElementById('d-bar-y').style.left = (yNum * 100) + '%';
+        document.getElementById('d-bar-base').style.left = (baseNum * 100) + '%';
+        document.getElementById('d-bar-peak').style.left = (peakNum * 100) + '%';
       });
 
       trackingInterval = setInterval(() => {

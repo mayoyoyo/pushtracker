@@ -3,15 +3,12 @@ import { FilesetResolver, PoseLandmarker, DrawingUtils } from 'https://cdn.jsdel
 let poseLandmarker = null;
 let animationFrameId = null;
 
-// Thresholds — these are what we're tuning
-const UP_ANGLE = 150;
-const DOWN_ANGLE = 100;
+// Front-facing detection: track nose/shoulder vertical position
+// As user goes down, landmarks move down in frame (y increases)
+// As user pushes up, landmarks move up (y decreases)
+const SMOOTHING_WINDOW = 9;
 const MIN_VISIBILITY = 0.5;
-
-// Shoulder y-oscillation settings
-const SMOOTHING_WINDOW = 7;
-const MIN_MOVEMENT_AMPLITUDE = 0.03;
-const AMPLITUDE_WINDOW = 45;
+const MIN_DIP_AMPLITUDE = 0.04; // minimum vertical movement to count as a rep
 
 export async function initPoseDetection() {
   if (poseLandmarker) return poseLandmarker;
@@ -29,22 +26,6 @@ export async function initPoseDetection() {
   return poseLandmarker;
 }
 
-export function calculateAngle(a, b, c) {
-  const radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
-  let angle = Math.abs(radians * 180 / Math.PI);
-  if (angle > 180) angle = 360 - angle;
-  return angle;
-}
-
-function pickVisibleSide(landmarks) {
-  const leftVis = (landmarks[11].visibility + landmarks[13].visibility + landmarks[15].visibility) / 3;
-  const rightVis = (landmarks[12].visibility + landmarks[14].visibility + landmarks[16].visibility) / 3;
-  if (leftVis >= rightVis) {
-    return { shoulder: landmarks[11], elbow: landmarks[13], wrist: landmarks[15], visibility: leftVis };
-  }
-  return { shoulder: landmarks[12], elbow: landmarks[14], wrist: landmarks[16], visibility: rightVis };
-}
-
 function smoothValue(buffer, newValue) {
   buffer.push(newValue);
   if (buffer.length > SMOOTHING_WINDOW) buffer.shift();
@@ -53,21 +34,24 @@ function smoothValue(buffer, newValue) {
 
 export function startTracking(video, canvas, onCount, onDebug) {
   const ctx = canvas.getContext('2d');
-  let state = 'UP';
   let count = 0;
   let tracking = false;
   let frameNum = 0;
 
-  const shoulderYBuffer = [];
-  const elbowAngleBuffer = [];
-  const recentShoulderY = [];
+  // Smoothing buffer for the tracking point's y-position
+  const yBuffer = [];
 
-  // Event log for debugging — stores state transitions and key moments
+  // Peak detection state
+  // We're looking for: y goes UP (nose dips down toward floor) then comes back DOWN
+  // In normalized coords: y increases = going down, y decreases = coming up
+  let phase = 'READY'; // READY -> DESCENDING -> ASCENDING (count!)
+  let peakY = 0;       // highest y seen during descent (lowest physical position)
+  let baselineY = 0;   // y when we started tracking / last UP position
+  let lastSmoothedY = 0;
+
   const eventLog = [];
-
   function logEvent(type, data) {
     eventLog.push({ t: (performance.now() / 1000).toFixed(2), frame: frameNum, type, ...data });
-    // Keep last 200 events
     if (eventLog.length > 200) eventLog.shift();
   }
 
@@ -88,60 +72,100 @@ export function startTracking(video, canvas, onCount, onDebug) {
       const landmarks = result.landmarks[0];
       tracking = true;
 
+      // Draw skeleton
       const drawingUtils = new DrawingUtils(ctx);
       drawingUtils.drawLandmarks(landmarks, { radius: 3, color: '#48bb78', fillColor: '#48bb78' });
       drawingUtils.drawConnectors(landmarks, PoseLandmarker.POSE_CONNECTIONS, { color: '#3182ce', lineWidth: 2 });
 
-      const { shoulder, elbow, wrist, visibility } = pickVisibleSide(landmarks);
+      // Use nose (0) as primary tracking point, fall back to mid-shoulder
+      const nose = landmarks[0];
+      const lShoulder = landmarks[11];
+      const rShoulder = landmarks[12];
 
-      if (visibility < MIN_VISIBILITY) {
-        if (onDebug) onDebug({ rawAngle: 0, smoothAngle: 0, shoulderY: 0, amplitude: 0, state, gated: 'low-vis', count, vis: visibility.toFixed(2) });
+      // Pick the best tracking point based on visibility
+      let trackY, trackVis, trackLabel;
+      if (nose.visibility > MIN_VISIBILITY) {
+        trackY = nose.y;
+        trackVis = nose.visibility;
+        trackLabel = 'nose';
+      } else if (lShoulder.visibility > MIN_VISIBILITY || rShoulder.visibility > MIN_VISIBILITY) {
+        trackY = (lShoulder.y + rShoulder.y) / 2;
+        trackVis = Math.max(lShoulder.visibility, rShoulder.visibility);
+        trackLabel = 'shoulders';
+      } else {
+        if (onDebug) onDebug({ smoothY: 0, baselineY: 0, peakY: 0, dip: 0, phase, count, gated: 'low-vis', trackLabel: 'none' });
         animationFrameId = requestAnimationFrame(processFrame);
         return;
       }
 
-      const smoothedShoulderY = smoothValue(shoulderYBuffer, shoulder.y);
-      const rawAngle = calculateAngle(shoulder, elbow, wrist);
-      const smoothedAngle = smoothValue(elbowAngleBuffer, rawAngle);
+      const smoothedY = smoothValue(yBuffer, trackY);
 
-      recentShoulderY.push(smoothedShoulderY);
-      if (recentShoulderY.length > AMPLITUDE_WINDOW) recentShoulderY.shift();
-      const amplitude = Math.max(...recentShoulderY) - Math.min(...recentShoulderY);
+      // Initialize baseline on first good frame
+      if (baselineY === 0) {
+        baselineY = smoothedY;
+        peakY = smoothedY;
+      }
 
-      const gated = amplitude < MIN_MOVEMENT_AMPLITUDE;
+      const dip = smoothedY - baselineY; // positive = moved down, negative = moved up
+      const dipFromPeak = peakY - smoothedY; // positive = moving back up from lowest point
 
       if (onDebug) {
         onDebug({
-          rawAngle: Math.round(rawAngle),
-          smoothAngle: Math.round(smoothedAngle),
-          shoulderY: smoothedShoulderY.toFixed(3),
-          amplitude: amplitude.toFixed(3),
-          state,
-          gated: gated ? 'no-motion' : 'active',
+          smoothY: smoothedY.toFixed(3),
+          baselineY: baselineY.toFixed(3),
+          peakY: peakY.toFixed(3),
+          dip: dip.toFixed(3),
+          phase,
           count,
-          vis: visibility.toFixed(2),
+          gated: 'active',
+          trackLabel,
+          vis: trackVis.toFixed(2),
         });
       }
 
-      if (gated) {
-        animationFrameId = requestAnimationFrame(processFrame);
-        return;
+      // Phase state machine:
+      // READY: waiting for user to start going down
+      // DESCENDING: user is going down (y increasing)
+      // ASCENDING: user is coming back up — once they return near baseline, count it
+
+      if (phase === 'READY') {
+        baselineY = smoothedY * 0.05 + baselineY * 0.95; // slowly adapt baseline
+        if (dip > MIN_DIP_AMPLITUDE * 0.5) {
+          phase = 'DESCENDING';
+          peakY = smoothedY;
+          logEvent('DESCEND_START', { y: smoothedY.toFixed(3), baseline: baselineY.toFixed(3) });
+        }
       }
 
-      const prevState = state;
-      if (smoothedAngle < DOWN_ANGLE && state === 'UP') {
-        state = 'DOWN';
-        logEvent('DOWN', { angle: Math.round(smoothedAngle), raw: Math.round(rawAngle), amp: amplitude.toFixed(3), sy: smoothedShoulderY.toFixed(3) });
+      if (phase === 'DESCENDING') {
+        if (smoothedY > peakY) {
+          peakY = smoothedY; // track the lowest point
+        }
+        // They've gone down enough and now started coming back up
+        if (dipFromPeak > MIN_DIP_AMPLITUDE * 0.3 && (peakY - baselineY) > MIN_DIP_AMPLITUDE) {
+          phase = 'ASCENDING';
+          logEvent('ASCENDING', { peakY: peakY.toFixed(3), dipFromPeak: dipFromPeak.toFixed(3) });
+        }
       }
-      if (smoothedAngle > UP_ANGLE && state === 'DOWN') {
-        state = 'UP';
-        count++;
-        onCount(count);
-        logEvent('COUNT', { n: count, angle: Math.round(smoothedAngle), raw: Math.round(rawAngle), amp: amplitude.toFixed(3), sy: smoothedShoulderY.toFixed(3) });
+
+      if (phase === 'ASCENDING') {
+        // Count when they've returned close to baseline (within 40% of the dip)
+        const totalDip = peakY - baselineY;
+        const returnAmount = peakY - smoothedY;
+        if (returnAmount > totalDip * 0.6) {
+          count++;
+          onCount(count);
+          logEvent('COUNT', { n: count, y: smoothedY.toFixed(3), totalDip: totalDip.toFixed(3) });
+          phase = 'READY';
+          baselineY = smoothedY; // reset baseline to current position
+          peakY = smoothedY;
+        }
       }
+
+      lastSmoothedY = smoothedY;
     } else {
       tracking = false;
-      if (onDebug) onDebug({ rawAngle: 0, smoothAngle: 0, shoulderY: 0, amplitude: 0, state, gated: 'no-pose', count, vis: '0' });
+      if (onDebug) onDebug({ smoothY: 0, baselineY: 0, peakY: 0, dip: 0, phase, count, gated: 'no-pose', trackLabel: 'none' });
     }
 
     animationFrameId = requestAnimationFrame(processFrame);
