@@ -161,7 +161,8 @@ function startStandardTracking(video, canvas, onCount, onDebug) {
   const elbowBuf = [];
 
   const UP_ANGLE = 150, DOWN_ANGLE = 100;
-  const MAX_HIP_KNEE_PROXIMITY = 0.15;
+  const MAX_HIP_KNEE_PROXIMITY = 0.08; // tighter = only catches truly tucked knees from side view
+  const MIN_DOWN_FRAMES = 15; // ~0.5s at 30fps — prevents counting laptop jiggle
   let state = 'UP';
   let kneelingFrames = 0, totalLBFrames = 0;
   let descentStartFrame = 0;
@@ -219,16 +220,22 @@ function startStandardTracking(video, canvas, onCount, onDebug) {
       }
 
       if (angle > UP_ANGLE && state === 'DOWN') {
-        // Check kneeling before counting
-        const kr = totalLBFrames > 0 ? kneelingFrames / totalLBFrames : 0;
-        if (kr > 0.5) {
-          log('REJECT', { reason: 'kneeling', kneel: kr.toFixed(2), angle });
+        const framesInDown = frameNum - descentStartFrame;
+        if (framesInDown < MIN_DOWN_FRAMES) {
+          // Too fast — jiggle, not a real pushup
+          log('REJECT', { reason: 'too-fast', frames: framesInDown, angle });
           state = 'UP'; kneelingFrames = 0; totalLBFrames = 0;
         } else {
-          state = 'UP';
-          count++; onCount(count);
-          log('COUNT', { n: count, angle, kneel: kr.toFixed(2) });
-          kneelingFrames = 0; totalLBFrames = 0;
+          const kr = totalLBFrames > 0 ? kneelingFrames / totalLBFrames : 0;
+          if (kr > 0.5) {
+            log('REJECT', { reason: 'kneeling', kneel: kr.toFixed(2), angle, frames: framesInDown });
+            state = 'UP'; kneelingFrames = 0; totalLBFrames = 0;
+          } else {
+            state = 'UP';
+            count++; onCount(count);
+            log('COUNT', { n: count, angle, kneel: kr.toFixed(2), frames: framesInDown });
+            kneelingFrames = 0; totalLBFrames = 0;
+          }
         }
       }
     } else { tracking = false; if (onDebug) onDebug({ state, count, gated: 'no-pose', mode: 'STANDARD' }); }
