@@ -23,7 +23,13 @@ function showToast(msg, duration = 3000) {
   setTimeout(() => el.classList.add('hidden'), duration);
 }
 
-function initIcons() { if (window.lucide) lucide.createIcons(); }
+let lucideReady = false;
+function initIcons() { if (lucideReady) lucide.createIcons(); }
+document.addEventListener('DOMContentLoaded', () => {
+  const s = document.querySelector('script[src*="lucide"]');
+  if (s) s.addEventListener('load', () => { lucideReady = true; initIcons(); });
+  if (window.lucide) { lucideReady = true; initIcons(); }
+});
 
 function showScreen(name, data) {
   currentScreen = name;
