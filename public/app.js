@@ -281,82 +281,186 @@ async function renderTeam(app) {
   app.querySelector('#back-dash').addEventListener('click', () => loadDashboard());
 }
 
-async function renderCamera(app) {
-  let facingMode = 'user';
-  let stream = null;
-  let tracker = null;
-
+function showTutorial(onStart) {
+  const app = document.getElementById('app');
   app.innerHTML = `
-    <div class="camera-screen">
-      <div class="camera-feed">
-        <video id="cam-video" playsinline autoplay muted></video>
-        <canvas id="cam-canvas"></canvas>
-        <div class="tracking-badge hidden" id="cam-tracking">TRACKING</div>
-      </div>
-      <div class="camera-counter">
-        <div class="count" id="cam-count">0</div>
-        <div class="count-label">pushups detected</div>
-      </div>
-      <div class="camera-controls">
-        <button class="btn btn-danger" id="cam-stop">Stop &amp; Save</button>
-        <button class="btn-flip" id="cam-flip">&#128260;</button>
+    <div class="camera-screen" style="background:var(--bg);overflow-y:auto">
+      <div style="padding:24px 20px;max-width:400px;margin:0 auto">
+        <h2 style="text-align:center;margin-bottom:16px">Camera Setup</h2>
+
+        <div style="margin-bottom:20px">
+          <svg viewBox="0 0 400 240" style="width:100%;border-radius:10px;background:#1a1a2e">
+            <!-- Floor line -->
+            <line x1="20" y1="200" x2="380" y2="200" stroke="#4a5568" stroke-width="2"/>
+
+            <!-- Person in pushup UP position -->
+            <!-- Head -->
+            <circle cx="100" cy="130" r="14" fill="#48bb78" opacity="0.3"/>
+            <circle cx="100" cy="130" r="14" stroke="#48bb78" stroke-width="2" fill="none"/>
+            <!-- Torso (shoulder to hip) -->
+            <line x1="120" y1="140" x2="250" y2="155" stroke="#3182ce" stroke-width="3"/>
+            <!-- Upper arm (shoulder to elbow) -->
+            <line x1="120" y1="140" x2="110" y2="175" stroke="#3182ce" stroke-width="3"/>
+            <!-- Forearm (elbow to wrist/ground) -->
+            <line x1="110" y1="175" x2="110" y2="200" stroke="#3182ce" stroke-width="3"/>
+            <!-- Legs -->
+            <line x1="250" y1="155" x2="340" y2="175" stroke="#3182ce" stroke-width="3"/>
+            <line x1="340" y1="175" x2="360" y2="200" stroke="#3182ce" stroke-width="3"/>
+            <!-- Joints -->
+            <circle cx="120" cy="140" r="5" fill="#48bb78"/>
+            <circle cx="110" cy="175" r="5" fill="#48bb78"/>
+            <circle cx="110" cy="200" r="5" fill="#48bb78"/>
+            <circle cx="250" cy="155" r="5" fill="#48bb78"/>
+            <circle cx="340" cy="175" r="5" fill="#48bb78"/>
+            <circle cx="360" cy="200" r="5" fill="#48bb78"/>
+            <!-- Label UP -->
+            <text x="85" y="115" fill="#48bb78" font-size="14" font-weight="bold">UP</text>
+
+            <!-- Person in pushup DOWN position (ghosted) -->
+            <!-- Head -->
+            <circle cx="100" cy="175" r="14" fill="#fc8181" opacity="0.15"/>
+            <circle cx="100" cy="175" r="14" stroke="#fc8181" stroke-width="2" fill="none" opacity="0.5" stroke-dasharray="4"/>
+            <!-- Torso -->
+            <line x1="115" y1="180" x2="250" y2="170" stroke="#fc8181" stroke-width="2" opacity="0.4" stroke-dasharray="4"/>
+            <!-- Upper arm -->
+            <line x1="115" y1="180" x2="135" y2="195" stroke="#fc8181" stroke-width="2" opacity="0.4" stroke-dasharray="4"/>
+            <!-- Forearm -->
+            <line x1="135" y1="195" x2="110" y2="200" stroke="#fc8181" stroke-width="2" opacity="0.4" stroke-dasharray="4"/>
+            <!-- Label DOWN -->
+            <text x="75" y="170" fill="#fc8181" font-size="14" font-weight="bold" opacity="0.6">DOWN</text>
+
+            <!-- Arrow showing motion -->
+            <path d="M 75 125 Q 60 150 75 170" stroke="#ecc94b" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+            <defs><marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#ecc94b"/></marker></defs>
+
+            <!-- Phone/laptop icon -->
+            <rect x="15" y="55" width="35" height="50" rx="4" fill="none" stroke="#718096" stroke-width="2"/>
+            <circle cx="32" cy="68" r="4" fill="#718096"/>
+            <line x1="32" y1="78" x2="32" y2="95" stroke="#718096" stroke-width="1" stroke-dasharray="2"/>
+            <text x="10" y="48" fill="#718096" font-size="11">Camera</text>
+          </svg>
+        </div>
+
+        <div style="background:var(--surface);border-radius:10px;padding:16px;margin-bottom:16px">
+          <div style="font-weight:600;margin-bottom:10px">Best setup:</div>
+          <ul style="padding-left:18px;line-height:1.8;font-size:14px;color:var(--text-dim)">
+            <li><strong style="color:var(--text)">Side view works best</strong> -- place phone/laptop to your side</li>
+            <li><strong style="color:var(--text)">Show your full upper body</strong> -- shoulders, elbows, and wrists visible</li>
+            <li><strong style="color:var(--text)">Stable surface</strong> -- don't move the camera during your set</li>
+            <li><strong style="color:var(--text)">Good lighting</strong> -- face a light source, avoid backlighting</li>
+          </ul>
+        </div>
+
+        <div style="background:var(--surface);border-radius:10px;padding:16px;margin-bottom:20px">
+          <div style="font-weight:600;margin-bottom:10px">How it works:</div>
+          <p style="font-size:14px;color:var(--text-dim);line-height:1.6">
+            The AI tracks your shoulder and elbow movement. It counts a rep when your elbows bend past 100 degrees (down) and extend past 150 degrees (up). Your shoulders need to visibly move -- just bending elbows while sitting won't count.
+          </p>
+        </div>
+
+        <button class="btn btn-primary" style="width:100%;margin-bottom:10px" id="tut-start">Start Camera</button>
+        <button class="btn btn-surface" style="width:100%" id="tut-back">Back</button>
       </div>
     </div>
   `;
 
-  const video = document.getElementById('cam-video');
-  const canvas = document.getElementById('cam-canvas');
-  const countEl = document.getElementById('cam-count');
-  const trackingBadge = document.getElementById('cam-tracking');
-  let trackingInterval;
+  document.getElementById('tut-start').addEventListener('click', onStart);
+  document.getElementById('tut-back').addEventListener('click', () => loadDashboard());
+}
 
-  async function startCamera() {
-    const pose = await loadPose();
-    await pose.initPoseDetection();
-    stream = await pose.getCamera(facingMode);
-    video.srcObject = stream;
-    await video.play();
+async function renderCamera(app) {
+  // Show tutorial first
+  showTutorial(() => startCameraSession());
 
-    tracker = pose.startTracking(video, canvas, (count) => {
-      countEl.textContent = count;
+  async function startCameraSession() {
+    let facingMode = 'user';
+    let stream = null;
+    let tracker = null;
+
+    app.innerHTML = `
+      <div class="camera-screen">
+        <div class="camera-feed">
+          <video id="cam-video" playsinline autoplay muted></video>
+          <canvas id="cam-canvas"></canvas>
+          <div class="tracking-badge hidden" id="cam-tracking">TRACKING</div>
+          <div id="cam-debug" style="position:absolute;bottom:8px;left:8px;font-size:11px;color:#48bb78;font-family:monospace;background:rgba(0,0,0,0.6);padding:4px 8px;border-radius:4px;display:none"></div>
+        </div>
+        <div class="camera-counter">
+          <div class="count" id="cam-count">0</div>
+          <div class="count-label">pushups detected</div>
+        </div>
+        <div class="camera-controls">
+          <button class="btn btn-danger" id="cam-stop">Stop &amp; Save</button>
+          <button class="btn-flip" id="cam-flip" title="Flip camera">&#128260;</button>
+          <button class="btn-flip" id="cam-help" title="Help">?</button>
+        </div>
+      </div>
+    `;
+
+    const video = document.getElementById('cam-video');
+    const canvas = document.getElementById('cam-canvas');
+    const countEl = document.getElementById('cam-count');
+    const trackingBadge = document.getElementById('cam-tracking');
+    const debugEl = document.getElementById('cam-debug');
+    let trackingInterval;
+
+    async function startCamera() {
+      const pose = await loadPose();
+      await pose.initPoseDetection();
+      stream = await pose.getCamera(facingMode);
+      video.srcObject = stream;
+      await video.play();
+
+      tracker = pose.startTracking(video, canvas, (count) => {
+        countEl.textContent = count;
+      }, (debug) => {
+        // Show debug info so user can see what the algorithm sees
+        debugEl.style.display = 'block';
+        debugEl.textContent = `angle:${debug.angle} move:${debug.amplitude} ${debug.state}`;
+      });
+
+      trackingInterval = setInterval(() => {
+        if (tracker && tracker.isTracking()) {
+          trackingBadge.classList.remove('hidden');
+        } else {
+          trackingBadge.classList.add('hidden');
+        }
+      }, 500);
+    }
+
+    function stopCamera() {
+      if (trackingInterval) clearInterval(trackingInterval);
+      if (tracker) tracker.stop();
+      if (stream) stream.getTracks().forEach(t => t.stop());
+    }
+
+    document.getElementById('cam-stop').addEventListener('click', async () => {
+      const count = tracker ? tracker.getCount() : 0;
+      stopCamera();
+      if (count > 0) {
+        await api('POST', '/api/pushups', { count, source: 'camera' });
+        showToast(`Saved ${count} pushups`);
+      }
+      await loadDashboard();
     });
 
-    trackingInterval = setInterval(() => {
-      if (tracker && tracker.isTracking()) {
-        trackingBadge.classList.remove('hidden');
-      } else {
-        trackingBadge.classList.add('hidden');
-      }
-    }, 500);
-  }
+    document.getElementById('cam-flip').addEventListener('click', async () => {
+      stopCamera();
+      facingMode = facingMode === 'user' ? 'environment' : 'user';
+      await startCamera();
+    });
 
-  function stopCamera() {
-    if (trackingInterval) clearInterval(trackingInterval);
-    if (tracker) tracker.stop();
-    if (stream) stream.getTracks().forEach(t => t.stop());
-  }
+    document.getElementById('cam-help').addEventListener('click', () => {
+      stopCamera();
+      showTutorial(() => startCameraSession());
+    });
 
-  document.getElementById('cam-stop').addEventListener('click', async () => {
-    const count = tracker ? tracker.getCount() : 0;
-    stopCamera();
-    if (count > 0) {
-      await api('POST', '/api/pushups', { count, source: 'camera' });
-      showToast(`Saved ${count} pushups`);
+    try {
+      await startCamera();
+    } catch (err) {
+      showToast('Camera access denied. Please allow camera permissions.');
+      await loadDashboard();
     }
-    await loadDashboard();
-  });
-
-  document.getElementById('cam-flip').addEventListener('click', async () => {
-    stopCamera();
-    facingMode = facingMode === 'user' ? 'environment' : 'user';
-    await startCamera();
-  });
-
-  try {
-    await startCamera();
-  } catch (err) {
-    showToast('Camera access denied. Please allow camera permissions.');
-    await loadDashboard();
   }
 }
 

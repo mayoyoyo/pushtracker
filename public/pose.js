@@ -3,9 +3,14 @@ import { FilesetResolver, PoseLandmarker, DrawingUtils } from 'https://cdn.jsdel
 let poseLandmarker = null;
 let animationFrameId = null;
 
-const UP_ANGLE = 160;
-const DOWN_ANGLE = 90;
-const MIN_VISIBILITY = 0.6;
+// More forgiving thresholds based on what working projects use
+const UP_ANGLE = 150;
+const DOWN_ANGLE = 100;
+const MIN_VISIBILITY = 0.5;
+
+// Shoulder y-oscillation settings
+const SMOOTHING_WINDOW = 7;
+const MIN_MOVEMENT_AMPLITUDE = 0.03; // minimum shoulder y movement to count as real motion
 
 export async function initPoseDetection() {
   if (poseLandmarker) return poseLandmarker;
@@ -34,29 +39,31 @@ function pickVisibleSide(landmarks) {
   const leftVis = (landmarks[11].visibility + landmarks[13].visibility + landmarks[15].visibility) / 3;
   const rightVis = (landmarks[12].visibility + landmarks[14].visibility + landmarks[16].visibility) / 3;
   if (leftVis >= rightVis) {
-    return { shoulder: landmarks[11], elbow: landmarks[13], wrist: landmarks[15], hip: landmarks[23], visibility: leftVis };
+    return { shoulder: landmarks[11], elbow: landmarks[13], wrist: landmarks[15], visibility: leftVis };
   }
-  return { shoulder: landmarks[12], elbow: landmarks[14], wrist: landmarks[16], hip: landmarks[24], visibility: rightVis };
+  return { shoulder: landmarks[12], elbow: landmarks[14], wrist: landmarks[16], visibility: rightVis };
 }
 
-function isInPushupPosition(shoulder, wrist, hip) {
-  // In a pushup, the body is roughly horizontal:
-  // 1. Wrists should be near or below shoulder height (y increases downward in image)
-  const wristBelowShoulder = wrist.y >= shoulder.y - 0.1;
-  // 2. Shoulders and hips should be at roughly similar height (body is horizontal, not upright)
-  //    Allow some tolerance — abs(shoulder.y - hip.y) should be small relative to frame
-  const bodyHorizontal = Math.abs(shoulder.y - hip.y) < 0.35;
-  // 3. The person shouldn't be standing upright — shoulder should not be far above hip
-  //    In an upright position, shoulder.y << hip.y (shoulder much higher)
-  const notUpright = (hip.y - shoulder.y) < 0.4;
-  return wristBelowShoulder && bodyHorizontal && notUpright;
+// Simple moving average for smoothing noisy landmark data
+function smoothValue(buffer, newValue) {
+  buffer.push(newValue);
+  if (buffer.length > SMOOTHING_WINDOW) buffer.shift();
+  return buffer.reduce((a, b) => a + b, 0) / buffer.length;
 }
 
-export function startTracking(video, canvas, onCount) {
+export function startTracking(video, canvas, onCount, onDebug) {
   const ctx = canvas.getContext('2d');
   let state = 'UP';
   let count = 0;
   let tracking = false;
+
+  // Rolling buffers for smoothing
+  const shoulderYBuffer = [];
+  const elbowAngleBuffer = [];
+
+  // Track shoulder y min/max over recent frames for amplitude gating
+  const recentShoulderY = [];
+  const AMPLITUDE_WINDOW = 45; // ~1.5 seconds at 30fps
 
   function processFrame() {
     if (!poseLandmarker || video.paused || video.ended) {
@@ -79,7 +86,7 @@ export function startTracking(video, canvas, onCount) {
       drawingUtils.drawLandmarks(landmarks, { radius: 3, color: '#48bb78', fillColor: '#48bb78' });
       drawingUtils.drawConnectors(landmarks, PoseLandmarker.POSE_CONNECTIONS, { color: '#3182ce', lineWidth: 2 });
 
-      const { shoulder, elbow, wrist, hip, visibility } = pickVisibleSide(landmarks);
+      const { shoulder, elbow, wrist, visibility } = pickVisibleSide(landmarks);
 
       // Skip frame if landmarks aren't confident enough
       if (visibility < MIN_VISIBILITY) {
@@ -87,18 +94,33 @@ export function startTracking(video, canvas, onCount) {
         return;
       }
 
-      // Only count if the person is actually in a pushup position
-      if (!isInPushupPosition(shoulder, wrist, hip)) {
+      // Smooth the signals to reduce jitter
+      const smoothedShoulderY = smoothValue(shoulderYBuffer, shoulder.y);
+      const rawAngle = calculateAngle(shoulder, elbow, wrist);
+      const smoothedAngle = smoothValue(elbowAngleBuffer, rawAngle);
+
+      // Track shoulder y amplitude over recent frames
+      recentShoulderY.push(smoothedShoulderY);
+      if (recentShoulderY.length > AMPLITUDE_WINDOW) recentShoulderY.shift();
+      const amplitude = Math.max(...recentShoulderY) - Math.min(...recentShoulderY);
+
+      // Send debug info if callback provided
+      if (onDebug) {
+        onDebug({ angle: Math.round(smoothedAngle), amplitude: amplitude.toFixed(3), state });
+      }
+
+      // Motion gate: only process state changes if there's real shoulder movement
+      // This kills false positives from sitting still / laptop jiggle
+      if (amplitude < MIN_MOVEMENT_AMPLITUDE) {
         animationFrameId = requestAnimationFrame(processFrame);
         return;
       }
 
-      const angle = calculateAngle(shoulder, elbow, wrist);
-
-      if (angle < DOWN_ANGLE && state === 'UP') {
+      // Dual signal: elbow angle for state transitions
+      if (smoothedAngle < DOWN_ANGLE && state === 'UP') {
         state = 'DOWN';
       }
-      if (angle > UP_ANGLE && state === 'DOWN') {
+      if (smoothedAngle > UP_ANGLE && state === 'DOWN') {
         state = 'UP';
         count++;
         onCount(count);
