@@ -1,5 +1,5 @@
 import { signup, login, logout, getSessionUser, parseSessionToken, sessionCookie, clearSessionCookie } from "./auth";
-import { logPushups, getTodayLogs, getTodayTotal, getTeamToday, updateTarget, updateDebt, updateTimezone, type User } from "./db";
+import { logPushups, getTodayLogs, getTodayTotal, getTeamByGroup, updateTarget, updateDebt, updateTimezone, type User } from "./db";
 import { getNextDayBoundary, getPreviousDayBoundary } from "./timezone";
 
 function json(data: unknown, status = 200, headers: Record<string, string> = {}): Response {
@@ -27,8 +27,8 @@ export async function handleApiRequest(req: Request): Promise<Response> {
   // --- Public routes ---
   if (path === "/api/auth/signup" && method === "POST") {
     try {
-      const { username, passcode, timezone } = await req.json();
-      const result = await signup(username, passcode, timezone);
+      const { username, passcode, timezone, inviteCode } = await req.json();
+      const result = await signup(username, passcode, timezone, inviteCode);
       return json({ user: publicUserData(result.user) }, 200, {
         "set-cookie": sessionCookie(result.token),
       });
@@ -129,7 +129,7 @@ export async function handleApiRequest(req: Request): Promise<Response> {
   }
 
   if (path === "/api/team/today" && method === "GET") {
-    const allUsers = getTeamToday();
+    const allUsers = getTeamByGroup(user.invite_code);
     const team = allUsers.map((u) => {
       const prevBoundary = getPreviousDayBoundary(u.timezone, u.next_day_boundary);
       const todayTotal = getTodayTotal(u.id, prevBoundary, u.next_day_boundary);

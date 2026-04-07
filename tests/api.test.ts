@@ -17,7 +17,7 @@ describe("api", () => {
 
   beforeEach(async () => {
     getDb(":memory:");
-    const result = await signup("hanson", "1234", "America/New_York");
+    const result = await signup("hanson", "1234", "America/New_York", "DEV0");
     token = result.token;
   });
 
@@ -26,7 +26,7 @@ describe("api", () => {
       const res = await handleApiRequest(new Request("http://localhost/api/auth/signup", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ username: "jake", passcode: "5678", timezone: "America/Chicago" }),
+        body: JSON.stringify({ username: "jake", passcode: "5678", timezone: "America/Chicago", inviteCode: "DEV0" }),
       }));
       expect(res.status).toBe(200);
       const data = await res.json();
@@ -109,7 +109,7 @@ describe("api", () => {
 
   describe("GET /api/team/today", () => {
     test("returns all team members", async () => {
-      await signup("jake", "5678", "America/Chicago");
+      await signup("jake", "5678", "America/Chicago", "DEV0");
       const res = await authedRequest("GET", "/api/team/today", token);
       expect(res.status).toBe(200);
       const data = await res.json();

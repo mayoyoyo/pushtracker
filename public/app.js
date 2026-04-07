@@ -48,6 +48,10 @@ function renderAuth(app) {
             <label>Username</label>
             <input type="text" id="auth-username" autocomplete="username" autocapitalize="none" required>
           </div>
+          <div class="input-group" ${mode === 'login' ? 'style="display:none"' : ''}>
+            <label>Invite Code</label>
+            <input type="text" id="auth-invite" autocapitalize="characters" placeholder="Enter invite code" style="text-transform:uppercase">
+          </div>
           <div class="input-group">
             <label>4-Digit Passcode</label>
             <div class="passcode-boxes">
@@ -98,7 +102,9 @@ function renderAuth(app) {
       try {
         const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
         if (mode === 'signup') {
-          const data = await api('POST', '/api/auth/signup', { username, passcode, timezone: tz });
+          const inviteCode = app.querySelector('#auth-invite').value.trim();
+          if (!inviteCode) { errEl.textContent = 'Enter an invite code'; return; }
+          const data = await api('POST', '/api/auth/signup', { username, passcode, timezone: tz, inviteCode });
           currentUser = data.user;
         } else {
           const data = await api('POST', '/api/auth/login', { username, passcode });

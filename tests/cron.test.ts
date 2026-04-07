@@ -8,17 +8,17 @@ describe("cron", () => {
   });
 
   test("adds debt when user misses target", () => {
-    const user = createUser("hanson", "hash", "America/New_York", "2026-04-07T11:00:00.000Z");
+    const user = createUser("hanson", "hash", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
     updateTarget(user.id, 50);
     logPushups(user.id, 30, "camera", "2026-04-06T14:00:00Z");
     processExpiredBoundaries("2026-04-07T12:00:00Z");
     const updated = getUserById(user.id)!;
     expect(updated.debt).toBe(20);
-    expect(updated.next_day_boundary).toBe("2026-04-08T11:00:00.000Z");
+    expect(updated.next_day_boundary).toBe("2026-04-08T11:00:00.000Z", "DEV0");
   });
 
   test("no debt when user meets target", () => {
-    const user = createUser("hanson", "hash", "America/New_York", "2026-04-07T11:00:00.000Z");
+    const user = createUser("hanson", "hash", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
     updateTarget(user.id, 50);
     logPushups(user.id, 60, "camera", "2026-04-06T14:00:00Z");
     processExpiredBoundaries("2026-04-07T12:00:00Z");
@@ -27,16 +27,16 @@ describe("cron", () => {
   });
 
   test("skips users whose boundary has not expired", () => {
-    const user = createUser("hanson", "hash", "America/New_York", "2026-04-08T11:00:00.000Z");
+    const user = createUser("hanson", "hash", "America/New_York", "2026-04-08T11:00:00.000Z", "DEV0");
     updateTarget(user.id, 50);
     processExpiredBoundaries("2026-04-07T12:00:00Z");
     const updated = getUserById(user.id)!;
     expect(updated.debt).toBe(0);
-    expect(updated.next_day_boundary).toBe("2026-04-08T11:00:00.000Z");
+    expect(updated.next_day_boundary).toBe("2026-04-08T11:00:00.000Z", "DEV0");
   });
 
   test("handles multiple expired boundaries (user offline for days)", () => {
-    const user = createUser("hanson", "hash", "America/New_York", "2026-04-05T11:00:00.000Z");
+    const user = createUser("hanson", "hash", "America/New_York", "2026-04-05T11:00:00.000Z", "DEV0");
     updateTarget(user.id, 50);
     processExpiredBoundaries("2026-04-08T12:00:00Z");
     const updated = getUserById(user.id)!;
@@ -45,7 +45,7 @@ describe("cron", () => {
   });
 
   test("no debt when target is 0", () => {
-    const user = createUser("hanson", "hash", "America/New_York", "2026-04-07T11:00:00.000Z");
+    const user = createUser("hanson", "hash", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
     processExpiredBoundaries("2026-04-07T12:00:00Z");
     const updated = getUserById(user.id)!;
     expect(updated.debt).toBe(0);

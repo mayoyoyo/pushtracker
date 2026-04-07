@@ -29,7 +29,18 @@ export function getDb(path: string = "pushtracker.db"): Database {
       user_id INTEGER NOT NULL REFERENCES users(id),
       expires_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS invite_codes (
+      code TEXT PRIMARY KEY,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
+  // Add invite_code column if missing (migration for existing DBs)
+  try { db.exec("ALTER TABLE users ADD COLUMN invite_code TEXT NOT NULL DEFAULT 'DEV0'"); } catch {}
+  // Seed invite codes
+  db.prepare("INSERT OR IGNORE INTO invite_codes (code) VALUES ('DEV0')").run();
+  db.prepare("INSERT OR IGNORE INTO invite_codes (code) VALUES ('FRST')").run();
+  // Migrate any old DEV users to DEV0
+  db.prepare("UPDATE users SET invite_code = 'DEV0' WHERE invite_code = 'DEV'").run();
   return db;
 }
 
@@ -40,6 +51,7 @@ export interface User {
   daily_target: number;
   debt: number;
   timezone: string;
+  invite_code: string;
   next_day_boundary: string;
   created_at: string;
 }
@@ -52,11 +64,15 @@ export interface PushupLog {
   logged_at: string;
 }
 
-export function createUser(username: string, passcode: string, timezone: string, nextDayBoundary: string): User {
+export function validateInviteCode(code: string): boolean {
+  return db.prepare("SELECT 1 FROM invite_codes WHERE code = ?").get(code) !== null;
+}
+
+export function createUser(username: string, passcode: string, timezone: string, nextDayBoundary: string, inviteCode: string): User {
   const stmt = db.prepare(
-    "INSERT INTO users (username, passcode, timezone, next_day_boundary) VALUES (?, ?, ?, ?) RETURNING *"
+    "INSERT INTO users (username, passcode, timezone, next_day_boundary, invite_code) VALUES (?, ?, ?, ?, ?) RETURNING *"
   );
-  return stmt.get(username, passcode, timezone, nextDayBoundary) as User;
+  return stmt.get(username, passcode, timezone, nextDayBoundary, inviteCode) as User;
 }
 
 export function getUserByUsername(username: string): User | null {
@@ -107,8 +123,8 @@ export function getTodayTotal(userId: number, dayStart: string, dayEnd: string):
   return row.total;
 }
 
-export function getTeamToday(): User[] {
-  return db.prepare("SELECT * FROM users ORDER BY username").all() as User[];
+export function getTeamByGroup(inviteCode: string): User[] {
+  return db.prepare("SELECT * FROM users WHERE invite_code = ? ORDER BY username").all(inviteCode) as User[];
 }
 
 export function getUsersWithExpiredBoundary(now: string): User[] {
