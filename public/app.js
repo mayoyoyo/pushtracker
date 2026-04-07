@@ -1,6 +1,12 @@
 let currentUser = null;
 let currentScreen = 'loading';
 
+let poseModule = null;
+async function loadPose() {
+  if (!poseModule) poseModule = await import('/pose.js');
+  return poseModule;
+}
+
 async function api(method, path, body) {
   const opts = { method, headers: { 'content-type': 'application/json' }, credentials: 'same-origin' };
   if (body) opts.body = JSON.stringify(body);
@@ -275,8 +281,83 @@ async function renderTeam(app) {
   app.querySelector('#back-dash').addEventListener('click', () => loadDashboard());
 }
 
-function renderCamera(app) {
-  app.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:80dvh"><p>Camera loading...</p></div>';
+async function renderCamera(app) {
+  let facingMode = 'user';
+  let stream = null;
+  let tracker = null;
+
+  app.innerHTML = `
+    <div class="camera-screen">
+      <div class="camera-feed">
+        <video id="cam-video" playsinline autoplay muted></video>
+        <canvas id="cam-canvas"></canvas>
+        <div class="tracking-badge hidden" id="cam-tracking">TRACKING</div>
+      </div>
+      <div class="camera-counter">
+        <div class="count" id="cam-count">0</div>
+        <div class="count-label">pushups detected</div>
+      </div>
+      <div class="camera-controls">
+        <button class="btn btn-danger" id="cam-stop">Stop &amp; Save</button>
+        <button class="btn-flip" id="cam-flip">&#128260;</button>
+      </div>
+    </div>
+  `;
+
+  const video = document.getElementById('cam-video');
+  const canvas = document.getElementById('cam-canvas');
+  const countEl = document.getElementById('cam-count');
+  const trackingBadge = document.getElementById('cam-tracking');
+  let trackingInterval;
+
+  async function startCamera() {
+    const pose = await loadPose();
+    await pose.initPoseDetection();
+    stream = await pose.getCamera(facingMode);
+    video.srcObject = stream;
+    await video.play();
+
+    tracker = pose.startTracking(video, canvas, (count) => {
+      countEl.textContent = count;
+    });
+
+    trackingInterval = setInterval(() => {
+      if (tracker && tracker.isTracking()) {
+        trackingBadge.classList.remove('hidden');
+      } else {
+        trackingBadge.classList.add('hidden');
+      }
+    }, 500);
+  }
+
+  function stopCamera() {
+    if (trackingInterval) clearInterval(trackingInterval);
+    if (tracker) tracker.stop();
+    if (stream) stream.getTracks().forEach(t => t.stop());
+  }
+
+  document.getElementById('cam-stop').addEventListener('click', async () => {
+    const count = tracker ? tracker.getCount() : 0;
+    stopCamera();
+    if (count > 0) {
+      await api('POST', '/api/pushups', { count, source: 'camera' });
+      showToast(`Saved ${count} pushups`);
+    }
+    await loadDashboard();
+  });
+
+  document.getElementById('cam-flip').addEventListener('click', async () => {
+    stopCamera();
+    facingMode = facingMode === 'user' ? 'environment' : 'user';
+    await startCamera();
+  });
+
+  try {
+    await startCamera();
+  } catch (err) {
+    showToast('Camera access denied. Please allow camera permissions.');
+    await loadDashboard();
+  }
 }
 
 async function init() {
