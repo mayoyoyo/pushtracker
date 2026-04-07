@@ -74,8 +74,16 @@ function startNoobTracking(video, canvas, onCount, onDebug) {
   let phase = 'READY', nosePeakY = 0, noseBaseY = 0, shoulderBaseY = 0, shoulderPeakY = 0;
   let minElbow = 180, wristSamples = [];
   const MAX_WRIST_VAR = 0.015, MIN_DIP = 0.04, MAX_ELBOW = 130;
+  const READY_FRAMES_NEEDED = 30, LOST_FRAMES_THRESHOLD = 30;
+  let gateState = 'NOT_READY', gateFrames = 0, lostFrames = 0;
   const eventLog = [];
   function log(type, data) { eventLog.push({ t: (performance.now()/1000).toFixed(2), frame: frameNum, type, ...data }); if (eventLog.length > 200) eventLog.shift(); }
+
+  function noobLandmarksVisible(lm) {
+    const shoulderVis = Math.max(lm[11].visibility, lm[12].visibility);
+    const noseVis = lm[0].visibility;
+    return shoulderVis > MIN_VISIBILITY && noseVis > MIN_VISIBILITY;
+  }
 
   function processFrame() {
     if (!poseLandmarker || video.paused || video.ended) { animationFrameId = requestAnimationFrame(processFrame); return; }
@@ -84,82 +92,141 @@ function startNoobTracking(video, canvas, onCount, onDebug) {
     const result = poseLandmarker.detectForVideo(video, performance.now());
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    if (result.landmarks && result.landmarks.length > 0) {
-      const lm = result.landmarks[0];
-      tracking = true;
-      drawSkeleton(ctx, lm);
-
-      const shoulderVis = Math.max(lm[11].visibility, lm[12].visibility);
-      if (shoulderVis < MIN_VISIBILITY) { if (onDebug) onDebug({ phase, count, gated: 'low-vis' }); animationFrameId = requestAnimationFrame(processFrame); return; }
-
-      const sY = smoothValue(shoulderYBuf, (lm[11].y + lm[12].y) / 2);
-      const hasNose = lm[0].visibility > MIN_VISIBILITY;
-      const nY = smoothValue(noseYBuf, hasNose ? lm[0].y : (lm[11].y + lm[12].y) / 2);
-      const rawElbow = getBestElbowAngle(lm);
-      const elbow = rawElbow !== null ? Math.round(smoothValue(elbowBuf, rawElbow)) : null;
-
-      // Wrist y
-      let wY = null;
-      if (lm[15].visibility > MIN_VISIBILITY && lm[16].visibility > MIN_VISIBILITY) wY = (lm[15].y + lm[16].y) / 2;
-      else if (lm[15].visibility > MIN_VISIBILITY) wY = lm[15].y;
-      else if (lm[16].visibility > MIN_VISIBILITY) wY = lm[16].y;
-
-      if (noseBaseY === 0) { noseBaseY = nY; nosePeakY = nY; shoulderBaseY = sY; shoulderPeakY = sY; }
-
-      const noseDip = nY - noseBaseY;
-      const shoulderDip = sY - shoulderBaseY;
-      const noseReturn = nosePeakY - nY;
-
-      // Track during descent
-      if (phase !== 'READY') {
-        if (elbow !== null && elbow < minElbow) minElbow = elbow;
-        if (wY !== null) wristSamples.push(wY);
-      }
-
-      let wVar = '--';
-      if (wristSamples.length >= 3) { const m = wristSamples.reduce((a,b)=>a+b,0)/wristSamples.length; wVar = Math.sqrt(wristSamples.reduce((s,v)=>s+(v-m)**2,0)/wristSamples.length).toFixed(4); }
-
-      if (onDebug) onDebug({ noseDip: noseDip.toFixed(3), shoulderDip: shoulderDip.toFixed(3), elbow: elbow ?? '--', minElbow: phase !== 'READY' ? minElbow : '--', wVar, phase, count, gated: 'active', mode: 'NOOB' });
-
-      if (phase === 'READY') {
-        noseBaseY = nY * 0.05 + noseBaseY * 0.95;
-        shoulderBaseY = sY * 0.05 + shoulderBaseY * 0.95;
-        if (noseDip > MIN_DIP * 0.5) {
-          phase = 'DESCENDING'; nosePeakY = nY; shoulderPeakY = sY; minElbow = elbow ?? 180; wristSamples = [];
-          log('DESCEND', { nY: nY.toFixed(3), sY: sY.toFixed(3), elbow });
+    if (!result.landmarks || result.landmarks.length === 0) {
+      tracking = false;
+      if (gateState === 'READY') {
+        lostFrames++;
+        if (lostFrames >= LOST_FRAMES_THRESHOLD) {
+          gateState = 'NOT_READY';
+          gateFrames = 0;
+          phase = 'READY';
+          noseYBuf.length = 0; shoulderYBuf.length = 0; elbowBuf.length = 0;
+          noseBaseY = 0;
+          playTone(330, 0.3);
+          log('PAUSED', { reason: 'landmarks-lost' });
         }
       }
+      if (onDebug) onDebug({ phase, count, gated: gateState === 'READY' ? 'pausing' : 'no-pose', mode: 'NOOB' });
+      animationFrameId = requestAnimationFrame(processFrame);
+      return;
+    }
 
-      if (phase === 'DESCENDING') {
-        if (nY > nosePeakY) nosePeakY = nY;
-        if (sY > shoulderPeakY) shoulderPeakY = sY;
-        const nTotal = nosePeakY - noseBaseY;
-        if (noseReturn > MIN_DIP * 0.3 && nTotal > MIN_DIP) {
-          const sTotal = shoulderPeakY - shoulderBaseY;
-          const sOk = sTotal > MIN_DIP * 0.5;
-          const eOk = minElbow <= MAX_ELBOW;
-          let wOk = false;
-          if (wristSamples.length >= 3) { const m = wristSamples.reduce((a,b)=>a+b,0)/wristSamples.length; const v = Math.sqrt(wristSamples.reduce((s,x)=>s+(x-m)**2,0)/wristSamples.length); wOk = v <= MAX_WRIST_VAR; }
-          if (sOk && eOk && wOk) {
-            phase = 'ASCENDING';
-            log('ASCEND', { noseDip: nTotal.toFixed(3), shoulderDip: sTotal.toFixed(3), minElbow });
-          } else {
-            const reason = !sOk ? 'shoulder' : minElbow >= 180 ? 'no-elbow' : !eOk ? 'elbow-straight' : wristSamples.length < 3 ? 'no-wrist' : 'wrist-moved';
-            log('REJECT', { reason, noseDip: nTotal.toFixed(3), shoulderDip: sTotal.toFixed(3), minElbow, wVar });
-            phase = 'READY'; noseBaseY = nY; nosePeakY = nY; shoulderBaseY = sY; shoulderPeakY = sY;
-          }
-        }
+    const lm = result.landmarks[0];
+    tracking = true;
+    drawSkeleton(ctx, lm);
+
+    // --- READY GATE ---
+    if (gateState === 'NOT_READY') {
+      if (noobLandmarksVisible(lm)) {
+        gateFrames++;
+      } else {
+        gateFrames = 0;
       }
 
-      if (phase === 'ASCENDING') {
-        const nTotal = nosePeakY - noseBaseY;
-        if (noseReturn > nTotal * 0.6) {
-          count++; onCount(count); playTone(660, 0.1);
-          log('COUNT', { n: count, noseDip: nTotal.toFixed(3), minElbow });
-          phase = 'READY'; noseBaseY = nY; nosePeakY = nY; shoulderBaseY = sY; shoulderPeakY = sY; minElbow = 180; wristSamples = [];
+      const missing = [];
+      if (lm[0].visibility <= MIN_VISIBILITY) missing.push('nose');
+      if (Math.max(lm[11].visibility, lm[12].visibility) <= MIN_VISIBILITY) missing.push('shoulders');
+
+      if (onDebug) onDebug({ gateProgress: `${gateFrames}/${READY_FRAMES_NEEDED}`, missing: missing.join(',') || 'none', phase: 'SETUP', count, gated: 'not-ready', mode: 'NOOB' });
+
+      if (gateFrames >= READY_FRAMES_NEEDED) {
+        gateState = 'READY';
+        lostFrames = 0;
+        noseBaseY = 0;
+        playTone(880, 0.15);
+        setTimeout(() => playTone(1100, 0.15), 170);
+        log('READY', {});
+      }
+      animationFrameId = requestAnimationFrame(processFrame);
+      return;
+    }
+
+    // --- TRACKING (gate is READY) ---
+    if (!noobLandmarksVisible(lm)) {
+      lostFrames++;
+      if (lostFrames >= LOST_FRAMES_THRESHOLD) {
+        gateState = 'NOT_READY';
+        gateFrames = 0;
+        phase = 'READY';
+        noseYBuf.length = 0; shoulderYBuf.length = 0; elbowBuf.length = 0;
+        noseBaseY = 0;
+        playTone(330, 0.3);
+        log('PAUSED', { reason: 'landmarks-lost' });
+      }
+      if (onDebug) onDebug({ phase, count, gated: 'losing-landmarks', mode: 'NOOB' });
+      animationFrameId = requestAnimationFrame(processFrame);
+      return;
+    }
+
+    lostFrames = 0;
+
+    const sY = smoothValue(shoulderYBuf, (lm[11].y + lm[12].y) / 2);
+    const nY = smoothValue(noseYBuf, lm[0].y);
+    const rawElbow = getBestElbowAngle(lm);
+    const elbow = rawElbow !== null ? Math.round(smoothValue(elbowBuf, rawElbow)) : null;
+
+    // Wrist y
+    let wY = null;
+    if (lm[15].visibility > MIN_VISIBILITY && lm[16].visibility > MIN_VISIBILITY) wY = (lm[15].y + lm[16].y) / 2;
+    else if (lm[15].visibility > MIN_VISIBILITY) wY = lm[15].y;
+    else if (lm[16].visibility > MIN_VISIBILITY) wY = lm[16].y;
+
+    if (noseBaseY === 0) { noseBaseY = nY; nosePeakY = nY; shoulderBaseY = sY; shoulderPeakY = sY; }
+
+    const noseDip = nY - noseBaseY;
+    const shoulderDip = sY - shoulderBaseY;
+    const noseReturn = nosePeakY - nY;
+
+    // Track during descent
+    if (phase !== 'READY') {
+      if (elbow !== null && elbow < minElbow) minElbow = elbow;
+      if (wY !== null) wristSamples.push(wY);
+    }
+
+    let wVar = '--';
+    if (wristSamples.length >= 3) { const m = wristSamples.reduce((a,b)=>a+b,0)/wristSamples.length; wVar = Math.sqrt(wristSamples.reduce((s,v)=>s+(v-m)**2,0)/wristSamples.length).toFixed(4); }
+
+    if (onDebug) onDebug({ noseDip: noseDip.toFixed(3), shoulderDip: shoulderDip.toFixed(3), elbow: elbow ?? '--', minElbow: phase !== 'READY' ? minElbow : '--', wVar, phase, count, gated: 'active', mode: 'NOOB' });
+
+    if (phase === 'READY') {
+      noseBaseY = nY * 0.05 + noseBaseY * 0.95;
+      shoulderBaseY = sY * 0.05 + shoulderBaseY * 0.95;
+      if (noseDip > MIN_DIP * 0.5) {
+        phase = 'DESCENDING'; nosePeakY = nY; shoulderPeakY = sY; minElbow = elbow ?? 180; wristSamples = [];
+        log('DESCEND', { nY: nY.toFixed(3), sY: sY.toFixed(3), elbow });
+      }
+    }
+
+    if (phase === 'DESCENDING') {
+      if (nY > nosePeakY) nosePeakY = nY;
+      if (sY > shoulderPeakY) shoulderPeakY = sY;
+      const nTotal = nosePeakY - noseBaseY;
+      if (noseReturn > MIN_DIP * 0.3 && nTotal > MIN_DIP) {
+        const sTotal = shoulderPeakY - shoulderBaseY;
+        const sOk = sTotal > MIN_DIP * 0.5;
+        const eOk = minElbow <= MAX_ELBOW;
+        let wOk = false;
+        if (wristSamples.length >= 3) { const m = wristSamples.reduce((a,b)=>a+b,0)/wristSamples.length; const v = Math.sqrt(wristSamples.reduce((s,x)=>s+(x-m)**2,0)/wristSamples.length); wOk = v <= MAX_WRIST_VAR; }
+        if (sOk && eOk && wOk) {
+          phase = 'ASCENDING';
+          log('ASCEND', { noseDip: nTotal.toFixed(3), shoulderDip: sTotal.toFixed(3), minElbow });
+        } else {
+          const reason = !sOk ? 'shoulder' : minElbow >= 180 ? 'no-elbow' : !eOk ? 'elbow-straight' : wristSamples.length < 3 ? 'no-wrist' : 'wrist-moved';
+          log('REJECT', { reason, noseDip: nTotal.toFixed(3), shoulderDip: sTotal.toFixed(3), minElbow, wVar });
+          phase = 'READY'; noseBaseY = nY; nosePeakY = nY; shoulderBaseY = sY; shoulderPeakY = sY;
         }
       }
-    } else { tracking = false; if (onDebug) onDebug({ phase, count, gated: 'no-pose', mode: 'NOOB' }); }
+    }
+
+    if (phase === 'ASCENDING') {
+      const nTotal = nosePeakY - noseBaseY;
+      if (noseReturn > nTotal * 0.6) {
+        count++; onCount(count); playTone(660, 0.1);
+        log('COUNT', { n: count, noseDip: nTotal.toFixed(3), minElbow });
+        phase = 'READY'; noseBaseY = nY; nosePeakY = nY; shoulderBaseY = sY; shoulderPeakY = sY; minElbow = 180; wristSamples = [];
+      }
+    }
+
     animationFrameId = requestAnimationFrame(processFrame);
   }
   animationFrameId = requestAnimationFrame(processFrame);

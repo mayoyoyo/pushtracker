@@ -365,7 +365,7 @@ async function renderCamera(app) {
     app.innerHTML = `
       <div class="camera-screen">
         <div class="camera-feed">
-          <video id="cam-video" playsinline autoplay muted></video>
+          <video id="cam-video" playsinline autoplay muted style="border:3px solid #fc8181;border-radius:8px"></video>
           <canvas id="cam-canvas"></canvas>
           <div class="tracking-badge hidden" id="cam-tracking">TRACKING</div>
         </div>
@@ -421,7 +421,7 @@ async function renderCamera(app) {
           document.getElementById('d-f1').textContent = 'nDip:' + (d.noseDip ?? '--');
           document.getElementById('d-f2').textContent = 'sDip:' + (d.shoulderDip ?? '--');
           document.getElementById('d-f3').textContent = 'elb:' + (d.elbow ?? '--');
-          document.getElementById('d-f4').textContent = 'wVar:' + (d.wVar ?? '--');
+          document.getElementById('d-f4').textContent = d.gateProgress ? 'gate:' + d.gateProgress : 'wVar:' + (d.wVar ?? '--');
         }
         const stateKey = d.phase || d.state || '--';
         document.getElementById('d-state').textContent = stateKey;
@@ -429,6 +429,7 @@ async function renderCamera(app) {
         document.getElementById('d-gate').textContent = d.gated ?? '--';
         document.getElementById('d-gate').style.color = d.gated === 'active' ? '#48bb78' : '#fc8181';
         document.getElementById('d-count').textContent = d.count ?? 0;
+        document.getElementById('cam-video').style.borderColor = d.gated === 'active' ? '#48bb78' : '#fc8181';
       }, mode);
 
       trackingInterval = setInterval(() => {
