@@ -383,7 +383,31 @@ async function renderCamera(app) {
           <video id="cam-video" playsinline autoplay muted></video>
           <canvas id="cam-canvas"></canvas>
           <div class="tracking-badge hidden" id="cam-tracking">TRACKING</div>
-          <div id="cam-debug" style="position:absolute;bottom:8px;left:8px;font-size:11px;color:#48bb78;font-family:monospace;background:rgba(0,0,0,0.6);padding:4px 8px;border-radius:4px;display:none"></div>
+        </div>
+        <div id="cam-debug-panel" style="background:rgba(0,0,0,0.85);padding:8px 12px;font-family:monospace;font-size:11px;line-height:1.6;color:#e2e8f0">
+          <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:4px">
+            <span>angle: <strong id="d-angle" style="color:#48bb78">--</strong></span>
+            <span>raw: <strong id="d-raw" style="color:#718096">--</strong></span>
+            <span>shY: <strong id="d-sy" style="color:#ecc94b">--</strong></span>
+            <span>amp: <strong id="d-amp" style="color:#63b3ed">--</strong></span>
+            <span>vis: <strong id="d-vis" style="color:#718096">--</strong></span>
+          </div>
+          <div style="display:flex;gap:12px;align-items:center">
+            <span>state: <strong id="d-state" style="color:#48bb78">--</strong></span>
+            <span>gate: <strong id="d-gate" style="color:#fc8181">--</strong></span>
+            <span>count: <strong id="d-count" style="color:#fff;font-size:14px">0</strong></span>
+          </div>
+          <div style="margin-top:4px">
+            <div style="display:flex;align-items:center;gap:6px">
+              <span style="font-size:10px;width:30px">angle</span>
+              <div style="flex:1;height:10px;background:#2d3748;border-radius:3px;position:relative;overflow:hidden">
+                <div id="d-bar" style="position:absolute;left:0;top:0;height:100%;width:0;background:#48bb78;transition:width 0.1s"></div>
+                <div style="position:absolute;left:55.5%;top:0;width:1px;height:100%;background:#fc8181" title="DOWN < 100"></div>
+                <div style="position:absolute;left:83.3%;top:0;width:1px;height:100%;background:#48bb78" title="UP > 150"></div>
+              </div>
+              <span style="font-size:9px;color:#718096">180</span>
+            </div>
+          </div>
         </div>
         <div class="camera-counter">
           <div class="count" id="cam-count">0</div>
@@ -392,6 +416,7 @@ async function renderCamera(app) {
         <div class="camera-controls">
           <button class="btn btn-danger" id="cam-stop">Stop &amp; Save</button>
           <button class="btn-flip" id="cam-flip" title="Flip camera">&#128260;</button>
+          <button class="btn-flip" id="cam-log" title="Copy debug log">LOG</button>
           <button class="btn-flip" id="cam-help" title="Help">?</button>
         </div>
       </div>
@@ -401,7 +426,6 @@ async function renderCamera(app) {
     const canvas = document.getElementById('cam-canvas');
     const countEl = document.getElementById('cam-count');
     const trackingBadge = document.getElementById('cam-tracking');
-    const debugEl = document.getElementById('cam-debug');
     let trackingInterval;
 
     async function startCamera() {
@@ -413,10 +437,22 @@ async function renderCamera(app) {
 
       tracker = pose.startTracking(video, canvas, (count) => {
         countEl.textContent = count;
-      }, (debug) => {
-        // Show debug info so user can see what the algorithm sees
-        debugEl.style.display = 'block';
-        debugEl.textContent = `angle:${debug.angle} move:${debug.amplitude} ${debug.state}`;
+      }, (d) => {
+        // Update debug panel
+        document.getElementById('d-angle').textContent = d.smoothAngle;
+        document.getElementById('d-raw').textContent = d.rawAngle;
+        document.getElementById('d-sy').textContent = d.shoulderY;
+        document.getElementById('d-amp').textContent = d.amplitude;
+        document.getElementById('d-vis').textContent = d.vis;
+        document.getElementById('d-state').textContent = d.state;
+        document.getElementById('d-state').style.color = d.state === 'DOWN' ? '#fc8181' : '#48bb78';
+        document.getElementById('d-gate').textContent = d.gated;
+        document.getElementById('d-gate').style.color = d.gated === 'active' ? '#48bb78' : '#fc8181';
+        document.getElementById('d-count').textContent = d.count;
+        // Angle bar (0-180 range)
+        const pct = Math.min(100, (d.smoothAngle / 180) * 100);
+        document.getElementById('d-bar').style.width = pct + '%';
+        document.getElementById('d-bar').style.background = d.state === 'DOWN' ? '#fc8181' : '#48bb78';
       });
 
       trackingInterval = setInterval(() => {
@@ -448,6 +484,19 @@ async function renderCamera(app) {
       stopCamera();
       facingMode = facingMode === 'user' ? 'environment' : 'user';
       await startCamera();
+    });
+
+    document.getElementById('cam-log').addEventListener('click', () => {
+      if (tracker) {
+        const log = tracker.getLog();
+        const text = log.map(e => JSON.stringify(e)).join('\n');
+        navigator.clipboard.writeText(text).then(() => {
+          showToast('Debug log copied to clipboard (' + log.length + ' events)');
+        }).catch(() => {
+          // Fallback: show in alert
+          prompt('Copy this debug log:', text);
+        });
+      }
     });
 
     document.getElementById('cam-help').addEventListener('click', () => {

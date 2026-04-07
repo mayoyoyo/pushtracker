@@ -3,14 +3,15 @@ import { FilesetResolver, PoseLandmarker, DrawingUtils } from 'https://cdn.jsdel
 let poseLandmarker = null;
 let animationFrameId = null;
 
-// More forgiving thresholds based on what working projects use
+// Thresholds — these are what we're tuning
 const UP_ANGLE = 150;
 const DOWN_ANGLE = 100;
 const MIN_VISIBILITY = 0.5;
 
 // Shoulder y-oscillation settings
 const SMOOTHING_WINDOW = 7;
-const MIN_MOVEMENT_AMPLITUDE = 0.03; // minimum shoulder y movement to count as real motion
+const MIN_MOVEMENT_AMPLITUDE = 0.03;
+const AMPLITUDE_WINDOW = 45;
 
 export async function initPoseDetection() {
   if (poseLandmarker) return poseLandmarker;
@@ -44,7 +45,6 @@ function pickVisibleSide(landmarks) {
   return { shoulder: landmarks[12], elbow: landmarks[14], wrist: landmarks[16], visibility: rightVis };
 }
 
-// Simple moving average for smoothing noisy landmark data
 function smoothValue(buffer, newValue) {
   buffer.push(newValue);
   if (buffer.length > SMOOTHING_WINDOW) buffer.shift();
@@ -56,14 +56,20 @@ export function startTracking(video, canvas, onCount, onDebug) {
   let state = 'UP';
   let count = 0;
   let tracking = false;
+  let frameNum = 0;
 
-  // Rolling buffers for smoothing
   const shoulderYBuffer = [];
   const elbowAngleBuffer = [];
-
-  // Track shoulder y min/max over recent frames for amplitude gating
   const recentShoulderY = [];
-  const AMPLITUDE_WINDOW = 45; // ~1.5 seconds at 30fps
+
+  // Event log for debugging — stores state transitions and key moments
+  const eventLog = [];
+
+  function logEvent(type, data) {
+    eventLog.push({ t: (performance.now() / 1000).toFixed(2), frame: frameNum, type, ...data });
+    // Keep last 200 events
+    if (eventLog.length > 200) eventLog.shift();
+  }
 
   function processFrame() {
     if (!poseLandmarker || video.paused || video.ended) {
@@ -71,6 +77,7 @@ export function startTracking(video, canvas, onCount, onDebug) {
       return;
     }
 
+    frameNum++;
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
 
@@ -81,52 +88,60 @@ export function startTracking(video, canvas, onCount, onDebug) {
       const landmarks = result.landmarks[0];
       tracking = true;
 
-      // Draw skeleton
       const drawingUtils = new DrawingUtils(ctx);
       drawingUtils.drawLandmarks(landmarks, { radius: 3, color: '#48bb78', fillColor: '#48bb78' });
       drawingUtils.drawConnectors(landmarks, PoseLandmarker.POSE_CONNECTIONS, { color: '#3182ce', lineWidth: 2 });
 
       const { shoulder, elbow, wrist, visibility } = pickVisibleSide(landmarks);
 
-      // Skip frame if landmarks aren't confident enough
       if (visibility < MIN_VISIBILITY) {
+        if (onDebug) onDebug({ rawAngle: 0, smoothAngle: 0, shoulderY: 0, amplitude: 0, state, gated: 'low-vis', count, vis: visibility.toFixed(2) });
         animationFrameId = requestAnimationFrame(processFrame);
         return;
       }
 
-      // Smooth the signals to reduce jitter
       const smoothedShoulderY = smoothValue(shoulderYBuffer, shoulder.y);
       const rawAngle = calculateAngle(shoulder, elbow, wrist);
       const smoothedAngle = smoothValue(elbowAngleBuffer, rawAngle);
 
-      // Track shoulder y amplitude over recent frames
       recentShoulderY.push(smoothedShoulderY);
       if (recentShoulderY.length > AMPLITUDE_WINDOW) recentShoulderY.shift();
       const amplitude = Math.max(...recentShoulderY) - Math.min(...recentShoulderY);
 
-      // Send debug info if callback provided
+      const gated = amplitude < MIN_MOVEMENT_AMPLITUDE;
+
       if (onDebug) {
-        onDebug({ angle: Math.round(smoothedAngle), amplitude: amplitude.toFixed(3), state });
+        onDebug({
+          rawAngle: Math.round(rawAngle),
+          smoothAngle: Math.round(smoothedAngle),
+          shoulderY: smoothedShoulderY.toFixed(3),
+          amplitude: amplitude.toFixed(3),
+          state,
+          gated: gated ? 'no-motion' : 'active',
+          count,
+          vis: visibility.toFixed(2),
+        });
       }
 
-      // Motion gate: only process state changes if there's real shoulder movement
-      // This kills false positives from sitting still / laptop jiggle
-      if (amplitude < MIN_MOVEMENT_AMPLITUDE) {
+      if (gated) {
         animationFrameId = requestAnimationFrame(processFrame);
         return;
       }
 
-      // Dual signal: elbow angle for state transitions
+      const prevState = state;
       if (smoothedAngle < DOWN_ANGLE && state === 'UP') {
         state = 'DOWN';
+        logEvent('DOWN', { angle: Math.round(smoothedAngle), raw: Math.round(rawAngle), amp: amplitude.toFixed(3), sy: smoothedShoulderY.toFixed(3) });
       }
       if (smoothedAngle > UP_ANGLE && state === 'DOWN') {
         state = 'UP';
         count++;
         onCount(count);
+        logEvent('COUNT', { n: count, angle: Math.round(smoothedAngle), raw: Math.round(rawAngle), amp: amplitude.toFixed(3), sy: smoothedShoulderY.toFixed(3) });
       }
     } else {
       tracking = false;
+      if (onDebug) onDebug({ rawAngle: 0, smoothAngle: 0, shoulderY: 0, amplitude: 0, state, gated: 'no-pose', count, vis: '0' });
     }
 
     animationFrameId = requestAnimationFrame(processFrame);
@@ -137,6 +152,7 @@ export function startTracking(video, canvas, onCount, onDebug) {
   return {
     getCount: () => count,
     isTracking: () => tracking,
+    getLog: () => eventLog,
     stop: () => {
       if (animationFrameId) cancelAnimationFrame(animationFrameId);
       animationFrameId = null;
