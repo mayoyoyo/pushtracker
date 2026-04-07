@@ -22,7 +22,7 @@ export function getDb(path: string = "pushtracker.db"): Database {
       user_id INTEGER NOT NULL REFERENCES users(id),
       count INTEGER NOT NULL,
       source TEXT NOT NULL CHECK(source IN ('camera', 'manual')),
-      logged_at TEXT NOT NULL DEFAULT (datetime('now'))
+      logged_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
     );
     CREATE TABLE IF NOT EXISTS sessions (
       token TEXT PRIMARY KEY,

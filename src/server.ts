@@ -1,16 +1,22 @@
 import { join } from "path";
+import { getDb } from "./db";
+import { handleApiRequest } from "./api";
 
 const PUBLIC_DIR = join(import.meta.dir, "..", "public");
 const PORT = parseInt(process.env.PORT || "3000");
+const DB_PATH = process.env.DB_PATH || "pushtracker.db";
+
+// Initialize database
+getDb(DB_PATH);
 
 const server = Bun.serve({
   port: PORT,
   async fetch(req) {
     const url = new URL(req.url);
 
-    // API routes will go here
+    // API routes
     if (url.pathname.startsWith("/api/")) {
-      return new Response("Not found", { status: 404 });
+      return handleApiRequest(req);
     }
 
     // Static files
