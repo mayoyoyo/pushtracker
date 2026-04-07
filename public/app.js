@@ -397,6 +397,10 @@ async function renderCamera(app) {
           <video id="cam-video" playsinline autoplay muted style="border:3px solid #fc8181;border-radius:8px"></video>
           <canvas id="cam-canvas"></canvas>
           <div class="tracking-badge hidden" id="cam-tracking">TRACKING</div>
+          <div id="depth-bar" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);width:12px;height:40%;background:rgba(0,0,0,0.5);border-radius:6px;overflow:hidden;border:1px solid rgba(255,255,255,0.2)">
+            <div id="depth-threshold" style="position:absolute;left:0;right:0;bottom:67%;height:2px;background:#fff;z-index:1"></div>
+            <div id="depth-fill" style="position:absolute;bottom:0;left:0;right:0;height:0%;background:#ef4444;transition:height 0.05s,background 0.1s;border-radius:0 0 5px 5px"></div>
+          </div>
         </div>
         <div id="cam-debug-panel" style="background:rgba(0,0,0,0.85);padding:8px 12px;font-family:monospace;font-size:11px;line-height:1.6;color:#e2e8f0">
           <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:4px">
@@ -438,6 +442,10 @@ async function renderCamera(app) {
               ${mode === 'standard' ? 'Side view' : 'Face camera'}
             </div>
             <button class="prod-btn" id="cam-help" title="Help">?</button>
+          </div>
+          <div id="depth-bar" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);width:12px;height:40%;background:rgba(0,0,0,0.5);border-radius:6px;overflow:hidden;border:1px solid rgba(255,255,255,0.2)">
+            <div id="depth-threshold" style="position:absolute;left:0;right:0;bottom:67%;height:2px;background:#fff;z-index:1"></div>
+            <div id="depth-fill" style="position:absolute;bottom:0;left:0;right:0;height:0%;background:#ef4444;transition:height 0.05s,background 0.1s;border-radius:0 0 5px 5px"></div>
           </div>
           <div id="cam-gate-msg" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:#fff;font-size:16px;font-weight:600;text-shadow:0 2px 8px rgba(0,0,0,0.8);pointer-events:none">
             Position yourself in frame...
@@ -512,6 +520,15 @@ async function renderCamera(app) {
           }
         }
         video.style.borderColor = d.gated === 'active' ? '#48bb78' : '#fc8181';
+        // Depth bar
+        const depthFill = document.getElementById('depth-fill');
+        const depthBar = document.getElementById('depth-bar');
+        if (depthFill && d.depth !== undefined) {
+          const pct = Math.round(d.depth * 100);
+          depthFill.style.height = pct + '%';
+          depthFill.style.background = d.depth >= (d.depthThreshold || 0.67) ? '#22c55e' : '#ef4444';
+          depthBar.style.opacity = d.gated === 'active' ? '1' : '0.3';
+        }
       }, mode);
 
       if (DEV_VIEW) {

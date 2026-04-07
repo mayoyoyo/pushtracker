@@ -190,7 +190,7 @@ function startNoobTracking(video, canvas, onCount, onDebug) {
     let wVar = '--';
     if (wristSamples.length >= 3) { const m = wristSamples.reduce((a,b)=>a+b,0)/wristSamples.length; wVar = Math.sqrt(wristSamples.reduce((s,v)=>s+(v-m)**2,0)/wristSamples.length).toFixed(4); }
 
-    if (onDebug) onDebug({ noseDip: noseDip.toFixed(3), shoulderDip: shoulderDip.toFixed(3), elbow: elbow ?? '--', minElbow: phase !== 'READY' ? minElbow : '--', wVar, phase, count, gated: 'active', mode: 'NOOB' });
+    if (onDebug) onDebug({ noseDip: noseDip.toFixed(3), shoulderDip: shoulderDip.toFixed(3), elbow: elbow ?? '--', minElbow: phase !== 'READY' ? minElbow : '--', wVar, phase, count, gated: 'active', mode: 'NOOB', depth: Math.min(1, Math.max(0, noseDip / (MIN_DIP * 1.5))), depthThreshold: 1 / 1.5 });
 
     if (phase === 'READY') {
       noseBaseY = nY * 0.05 + noseBaseY * 0.95;
@@ -247,7 +247,7 @@ function startStandardTracking(video, canvas, onCount, onDebug) {
 
   // Thresholds
   const MIN_DIP = 0.03;
-  const MIN_FRAMES = 15;
+  const MIN_FRAMES = 10;
   const MAX_ANKLE_VAR = 0.06;
   const MIN_KNEE_ANGLE = 120;
   const READY_FRAMES_NEEDED = 30;
@@ -380,7 +380,7 @@ function startStandardTracking(video, canvas, onCount, onDebug) {
     let ankleVar = '--';
     if (ankleYSamples.length >= 3) { const m = ankleYSamples.reduce((a,b)=>a+b,0)/ankleYSamples.length; ankleVar = Math.sqrt(ankleYSamples.reduce((s,v)=>s+(v-m)**2,0)/ankleYSamples.length).toFixed(4); }
 
-    if (onDebug) onDebug({ sDip: shoulderDip.toFixed(3), ankleVar, kneeAng: kAngle !== null ? Math.round(kAngle) : '--', phase, count, gated: 'active', mode: 'STANDARD' });
+    if (onDebug) onDebug({ sDip: shoulderDip.toFixed(3), ankleVar, kneeAng: kAngle !== null ? Math.round(kAngle) : '--', phase, count, gated: 'active', mode: 'STANDARD', depth: Math.min(1, Math.max(0, shoulderDip / (MIN_DIP * 1.5))), depthThreshold: 1 / 1.5 });
 
     // --- PHASE MACHINE ---
     if (phase === 'READY') {
