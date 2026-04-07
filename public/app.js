@@ -183,6 +183,7 @@ function renderDashboard(app, data) {
 
 function showManualEntry() {
   let count = 10;
+  let editing = false;
   const overlay = document.createElement('div');
   overlay.className = 'manual-entry';
   overlay.innerHTML = `
@@ -190,7 +191,8 @@ function showManualEntry() {
       <h3>Log Pushups</h3>
       <div class="stepper">
         <button id="step-down">\u2212</button>
-        <div class="value" id="step-val">${count}</div>
+        <div class="value" id="step-val" style="cursor:pointer">${count}</div>
+        <input type="number" id="step-input" inputmode="numeric" style="display:none;width:70px;font-size:36px;font-weight:700;text-align:center;background:transparent;border:1px solid var(--border);border-radius:var(--radius);color:var(--text);outline:none;letter-spacing:-1px" value="${count}">
         <button id="step-up">+</button>
       </div>
       <button class="btn btn-primary" style="width:100%;margin-bottom:10px" id="step-save">Save</button>
@@ -200,10 +202,31 @@ function showManualEntry() {
   document.body.appendChild(overlay); initIcons();
 
   const valEl = overlay.querySelector('#step-val');
-  overlay.querySelector('#step-down').addEventListener('click', () => { count = Math.max(1, count - 5); valEl.textContent = count; });
-  overlay.querySelector('#step-up').addEventListener('click', () => { count += 5; valEl.textContent = count; });
+  const inputEl = overlay.querySelector('#step-input');
+  function updateDisplay() { valEl.textContent = count; inputEl.value = count; }
+
+  overlay.querySelector('#step-down').addEventListener('click', () => { count = Math.max(1, count - 1); updateDisplay(); });
+  overlay.querySelector('#step-up').addEventListener('click', () => { count += 1; updateDisplay(); });
+
+  valEl.addEventListener('click', () => {
+    valEl.style.display = 'none';
+    inputEl.style.display = '';
+    inputEl.value = count;
+    inputEl.focus();
+    inputEl.select();
+  });
+  inputEl.addEventListener('blur', () => {
+    const v = parseInt(inputEl.value);
+    if (v > 0) count = v;
+    inputEl.style.display = 'none';
+    valEl.style.display = '';
+    updateDisplay();
+  });
+  inputEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') inputEl.blur(); });
+
   overlay.querySelector('#step-cancel').addEventListener('click', () => overlay.remove());
   overlay.querySelector('#step-save').addEventListener('click', async () => {
+    if (inputEl.style.display !== 'none') { const v = parseInt(inputEl.value); if (v > 0) count = v; }
     await api('POST', '/api/pushups', { count, source: 'manual' });
     overlay.remove();
     showToast(`Logged ${count} pushups`);
@@ -301,8 +324,8 @@ function showTutorial(onStart) {
         <h2 style="text-align:center;margin-bottom:8px">${isStd ? 'Standard Mode' : 'Noob Mode'}</h2>
         <div style="display:flex;justify-content:center;margin-bottom:16px">
           <div style="display:inline-flex;background:var(--surface-2);border-radius:8px;overflow:hidden">
-            <button id="mode-noob" style="padding:8px 16px;border:none;font-size:13px;cursor:pointer;background:${!isStd ? 'var(--primary)' : 'transparent'};color:var(--text)">Noob</button>
-            <button id="mode-std" style="padding:8px 16px;border:none;font-size:13px;cursor:pointer;background:${isStd ? 'var(--danger)' : 'transparent'};color:${isStd ? '#1a1a2e' : 'var(--text)'}">Standard</button>
+            <button id="mode-noob" style="padding:8px 16px;border:none;font-size:13px;font-weight:500;cursor:pointer;background:${!isStd ? 'var(--primary)' : 'transparent'};color:${!isStd ? 'var(--primary-fg)' : 'var(--text)'}">Noob</button>
+            <button id="mode-std" style="padding:8px 16px;border:none;font-size:13px;font-weight:500;cursor:pointer;background:${isStd ? 'var(--danger)' : 'transparent'};color:${isStd ? '#fff' : 'var(--text)'}">Standard</button>
           </div>
         </div>
 
@@ -311,7 +334,7 @@ function showTutorial(onStart) {
           <div style="font-size:15px;font-weight:700;color:var(--danger);margin-bottom:4px">Real ones only.</div>
           <div style="font-size:13px;color:var(--text-dim)">No knee pushups. No shortcuts. Full range of motion, verified.</div>
         </div>
-        <div style="background:var(--surface);border-radius:10px;padding:16px;margin-bottom:16px">
+        <div style="border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px">
           <div style="font-weight:600;margin-bottom:10px">Side-view setup:</div>
           <ul style="padding-left:18px;line-height:1.8;font-size:14px;color:var(--text-dim)">
             <li><strong style="color:var(--text)">Place camera to your side</strong> -- it needs to see your full profile</li>
@@ -320,14 +343,14 @@ function showTutorial(onStart) {
             <li><strong style="color:var(--text)">Wait for the chime</strong> -- a sound plays when the camera is ready</li>
           </ul>
         </div>
-        <div style="background:var(--surface);border-radius:10px;padding:16px;margin-bottom:20px">
+        <div style="border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:20px">
           <div style="font-weight:600;margin-bottom:10px">How it works:</div>
           <p style="font-size:14px;color:var(--text-dim);line-height:1.6">
             Tracks your shoulder movement from the side. Waits until it can see your full body, then counts reps by vertical shoulder displacement. Rejects knee pushups and camera movement.
           </p>
         </div>
         ` : `
-        <div style="background:var(--surface);border-radius:10px;padding:16px;margin-bottom:16px">
+        <div style="border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px">
           <div style="font-weight:600;margin-bottom:10px">Front-facing setup:</div>
           <ul style="padding-left:18px;line-height:1.8;font-size:14px;color:var(--text-dim)">
             <li><strong style="color:var(--text)">Face the camera</strong> -- place phone/laptop in front of you on the floor</li>
@@ -336,7 +359,7 @@ function showTutorial(onStart) {
             <li><strong style="color:var(--text)">Good lighting</strong> -- overhead or side lighting works best</li>
           </ul>
         </div>
-        <div style="background:var(--surface);border-radius:10px;padding:16px;margin-bottom:20px">
+        <div style="border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:20px">
           <div style="font-weight:600;margin-bottom:10px">How it works:</div>
           <p style="font-size:14px;color:var(--text-dim);line-height:1.6">
             Tracks your nose + shoulder vertical movement, elbow angle, and wrist stability. Easier to set up but allows knee pushups.
@@ -359,13 +382,12 @@ function showTutorial(onStart) {
 async function renderCamera(app) {
   showTutorial(() => startCameraSession());
 
-  const DEV_VIEW = mode === 'standard';
-
   async function startCameraSession() {
     let facingMode = cameraMode === 'standard' ? 'environment' : 'user';
     let stream = null;
     let tracker = null;
     const mode = cameraMode;
+    const DEV_VIEW = mode === 'standard';
     let sessionStartTime = null;
     let timerInterval = null;
 
