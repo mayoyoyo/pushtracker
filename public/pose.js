@@ -425,9 +425,13 @@ function startStandardTracking(video, canvas, onCount, onDebug) {
       if (smoothedShoulderY > shoulderPeakY) shoulderPeakY = smoothedShoulderY;
       const totalDip = shoulderPeakY - shoulderBaseY;
       const returnAmt = shoulderPeakY - smoothedShoulderY;
-      if (returnAmt > totalDip * 0.6) {
+      const ascendFrames = frameNum - descentStartFrame;
+      if (returnAmt > totalDip * 0.4) {
         count++; onCount(count); playTone(660, 0.1);
         log('COUNT', { n: count, sDip: totalDip.toFixed(3) });
+        phase = 'READY'; shoulderBaseY = smoothedShoulderY; shoulderPeakY = smoothedShoulderY; ankleYSamples = [];
+      } else if (ascendFrames > 90) {
+        log('REJECT', { reason: 'ascend-timeout', frames: ascendFrames, sDip: totalDip.toFixed(3), returnPct: (returnAmt / totalDip).toFixed(2) });
         phase = 'READY'; shoulderBaseY = smoothedShoulderY; shoulderPeakY = smoothedShoulderY; ankleYSamples = [];
       }
     }
