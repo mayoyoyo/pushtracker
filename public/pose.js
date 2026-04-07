@@ -80,9 +80,11 @@ function startNoobTracking(video, canvas, onCount, onDebug) {
   function log(type, data) { eventLog.push({ t: (performance.now()/1000).toFixed(2), frame: frameNum, type, ...data }); if (eventLog.length > 200) eventLog.shift(); }
 
   function noobLandmarksVisible(lm) {
-    const shoulderVis = Math.max(lm[11].visibility, lm[12].visibility);
     const noseVis = lm[0].visibility;
-    return shoulderVis > MIN_VISIBILITY && noseVis > MIN_VISIBILITY;
+    // Require at least one full arm (shoulder+elbow+wrist) visible
+    const lArmVis = Math.min(lm[11].visibility, lm[13].visibility, lm[15].visibility);
+    const rArmVis = Math.min(lm[12].visibility, lm[14].visibility, lm[16].visibility);
+    return noseVis > MIN_VISIBILITY && Math.max(lArmVis, rArmVis) > MIN_VISIBILITY;
   }
 
   function processFrame() {
@@ -125,7 +127,9 @@ function startNoobTracking(video, canvas, onCount, onDebug) {
 
       const missing = [];
       if (lm[0].visibility <= MIN_VISIBILITY) missing.push('nose');
-      if (Math.max(lm[11].visibility, lm[12].visibility) <= MIN_VISIBILITY) missing.push('shoulders');
+      const lArmOk = Math.min(lm[11].visibility, lm[13].visibility, lm[15].visibility) > MIN_VISIBILITY;
+      const rArmOk = Math.min(lm[12].visibility, lm[14].visibility, lm[16].visibility) > MIN_VISIBILITY;
+      if (!lArmOk && !rArmOk) missing.push('arms');
 
       if (onDebug) onDebug({ gateProgress: `${gateFrames}/${READY_FRAMES_NEEDED}`, missing: missing.join(',') || 'none', phase: 'SETUP', count, gated: 'not-ready', mode: 'NOOB' });
 
