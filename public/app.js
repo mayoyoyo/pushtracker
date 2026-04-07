@@ -287,70 +287,55 @@ async function renderTeam(app) {
   app.querySelector('#back-dash').addEventListener('click', () => loadDashboard());
 }
 
+let cameraMode = 'noob'; // 'noob' or 'standard'
+
 function showTutorial(onStart) {
   const app = document.getElementById('app');
+  const isStd = cameraMode === 'standard';
   app.innerHTML = `
     <div class="camera-screen" style="background:var(--bg);overflow-y:auto">
       <div style="padding:24px 20px;max-width:400px;margin:0 auto">
-        <h2 style="text-align:center;margin-bottom:16px">Camera Setup</h2>
-
-        <div style="margin-bottom:20px">
-          <svg viewBox="0 0 400 280" style="width:100%;border-radius:10px;background:#1a1a2e">
-            <!-- Floor line -->
-            <line x1="20" y1="240" x2="380" y2="240" stroke="#4a5568" stroke-width="2"/>
-
-            <!-- Phone/laptop on floor facing user -->
-            <rect x="170" y="210" width="60" height="30" rx="4" fill="none" stroke="#718096" stroke-width="2"/>
-            <circle cx="200" cy="218" r="4" fill="#718096"/>
-            <text x="172" y="255" fill="#718096" font-size="10">Your phone</text>
-            <!-- Camera view cone -->
-            <path d="M 200 215 L 130 100 L 270 100" stroke="#718096" stroke-width="1" fill="#718096" opacity="0.06"/>
-
-            <!-- Person UP position (facing camera) -->
-            <circle cx="200" cy="115" r="16" fill="#48bb78" opacity="0.3"/>
-            <circle cx="200" cy="115" r="16" stroke="#48bb78" stroke-width="2" fill="none"/>
-            <!-- Shoulders -->
-            <line x1="170" y1="138" x2="230" y2="138" stroke="#3182ce" stroke-width="3"/>
-            <!-- Arms going down -->
-            <line x1="170" y1="138" x2="155" y2="175" stroke="#3182ce" stroke-width="2"/>
-            <line x1="230" y1="138" x2="245" y2="175" stroke="#3182ce" stroke-width="2"/>
-            <!-- Joints -->
-            <circle cx="170" cy="138" r="4" fill="#48bb78"/>
-            <circle cx="230" cy="138" r="4" fill="#48bb78"/>
-            <text x="255" y="125" fill="#48bb78" font-size="13" font-weight="bold">UP</text>
-
-            <!-- Person DOWN position (closer to camera = lower + bigger) -->
-            <circle cx="200" cy="160" r="18" fill="#fc8181" opacity="0.1"/>
-            <circle cx="200" cy="160" r="18" stroke="#fc8181" stroke-width="2" fill="none" opacity="0.4" stroke-dasharray="4"/>
-            <line x1="160" y1="185" x2="240" y2="185" stroke="#fc8181" stroke-width="2" opacity="0.3" stroke-dasharray="4"/>
-            <text x="255" y="168" fill="#fc8181" font-size="13" font-weight="bold" opacity="0.5">DOWN</text>
-
-            <!-- Arrow showing vertical motion -->
-            <path d="M 140 120 L 140 165" stroke="#ecc94b" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
-            <path d="M 135 165 L 135 120" stroke="#ecc94b" stroke-width="2" fill="none" marker-end="url(#arrow)" opacity="0.5"/>
-            <defs><marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#ecc94b"/></marker></defs>
-
-            <text x="80" y="80" fill="#e2e8f0" font-size="12" opacity="0.5">Camera sees you</text>
-            <text x="80" y="95" fill="#e2e8f0" font-size="12" opacity="0.5">move up and down</text>
-          </svg>
+        <h2 style="text-align:center;margin-bottom:8px">${isStd ? 'Standard' : 'Noob'} Mode</h2>
+        <div style="display:flex;justify-content:center;margin-bottom:16px">
+          <div style="display:inline-flex;background:var(--surface-2);border-radius:8px;overflow:hidden">
+            <button id="mode-noob" style="padding:8px 16px;border:none;font-size:13px;cursor:pointer;background:${!isStd ? 'var(--primary)' : 'transparent'};color:var(--text)">Noob</button>
+            <button id="mode-std" style="padding:8px 16px;border:none;font-size:13px;cursor:pointer;background:${isStd ? 'var(--primary)' : 'transparent'};color:var(--text)">Standard</button>
+          </div>
         </div>
 
+        ${isStd ? `
         <div style="background:var(--surface);border-radius:10px;padding:16px;margin-bottom:16px">
-          <div style="font-weight:600;margin-bottom:10px">Setup:</div>
+          <div style="font-weight:600;margin-bottom:10px">Side-view setup:</div>
           <ul style="padding-left:18px;line-height:1.8;font-size:14px;color:var(--text-dim)">
-            <li><strong style="color:var(--text)">Face the camera</strong> -- place phone/laptop on the floor in front of you, screen facing up</li>
+            <li><strong style="color:var(--text)">Place camera to your side</strong> -- it needs to see your full profile</li>
+            <li><strong style="color:var(--text)">Full body visible</strong> -- shoulders, elbows, wrists, hips, and knees</li>
+            <li><strong style="color:var(--text)">Prop it 1-2 feet off the ground</strong> -- slightly elevated works best</li>
+            <li><strong style="color:var(--text)">Rejects knee pushups</strong> -- must be on toes with legs extended</li>
+          </ul>
+        </div>
+        <div style="background:var(--surface);border-radius:10px;padding:16px;margin-bottom:20px">
+          <div style="font-weight:600;margin-bottom:10px">How it works:</div>
+          <p style="font-size:14px;color:var(--text-dim);line-height:1.6">
+            Tracks your elbow angle from the side. Counts when elbows bend past 100\u00b0 (down) and extend past 150\u00b0 (up). Also checks that hips and knees are far apart (full pushup position, not kneeling).
+          </p>
+        </div>
+        ` : `
+        <div style="background:var(--surface);border-radius:10px;padding:16px;margin-bottom:16px">
+          <div style="font-weight:600;margin-bottom:10px">Front-facing setup:</div>
+          <ul style="padding-left:18px;line-height:1.8;font-size:14px;color:var(--text-dim)">
+            <li><strong style="color:var(--text)">Face the camera</strong> -- place phone/laptop in front of you on the floor</li>
             <li><strong style="color:var(--text)">Camera sees your face + shoulders</strong> -- that's all it needs</li>
             <li><strong style="color:var(--text)">Stable surface</strong> -- don't bump the camera during your set</li>
             <li><strong style="color:var(--text)">Good lighting</strong> -- overhead or side lighting works best</li>
           </ul>
         </div>
-
         <div style="background:var(--surface);border-radius:10px;padding:16px;margin-bottom:20px">
           <div style="font-weight:600;margin-bottom:10px">How it works:</div>
           <p style="font-size:14px;color:var(--text-dim);line-height:1.6">
-            The AI tracks your nose/shoulders. As you go down, they move lower in the frame. As you push up, they rise. Each full dip-and-return = 1 pushup. No special angle needed -- just go down and come back up.
+            Tracks your nose + shoulder vertical movement, elbow angle, and wrist stability. Easier to set up but allows knee pushups.
           </p>
         </div>
+        `}
 
         <button class="btn btn-primary" style="width:100%;margin-bottom:10px" id="tut-start">Start Camera</button>
         <button class="btn btn-surface" style="width:100%" id="tut-back">Back</button>
@@ -358,18 +343,20 @@ function showTutorial(onStart) {
     </div>
   `;
 
+  document.getElementById('mode-noob').addEventListener('click', () => { cameraMode = 'noob'; showTutorial(onStart); });
+  document.getElementById('mode-std').addEventListener('click', () => { cameraMode = 'standard'; showTutorial(onStart); });
   document.getElementById('tut-start').addEventListener('click', onStart);
   document.getElementById('tut-back').addEventListener('click', () => loadDashboard());
 }
 
 async function renderCamera(app) {
-  // Show tutorial first
   showTutorial(() => startCameraSession());
 
   async function startCameraSession() {
-    let facingMode = 'user';
+    let facingMode = cameraMode === 'standard' ? 'environment' : 'user';
     let stream = null;
     let tracker = null;
+    const mode = cameraMode;
 
     app.innerHTML = `
       <div class="camera-screen">
@@ -380,26 +367,16 @@ async function renderCamera(app) {
         </div>
         <div id="cam-debug-panel" style="background:rgba(0,0,0,0.85);padding:8px 12px;font-family:monospace;font-size:11px;line-height:1.6;color:#e2e8f0">
           <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:4px">
-            <span>nose: <strong id="d-nose" style="color:#ecc94b">--</strong></span>
-            <span>shld: <strong id="d-shld" style="color:#63b3ed">--</strong></span>
-            <span>elb: <strong id="d-elbow" style="color:#48bb78">--</strong></span>
-            <span>minE: <strong id="d-minelbow" style="color:#fc8181">--</strong></span>
-            <span>wVar: <strong id="d-wvar" style="color:#d69e2e">--</strong></span>
+            <span style="color:var(--primary);font-weight:bold">${mode === 'standard' ? 'STD' : 'NOOB'}</span>
+            <span>d1: <strong id="d-f1" style="color:#ecc94b">--</strong></span>
+            <span>d2: <strong id="d-f2" style="color:#63b3ed">--</strong></span>
+            <span>d3: <strong id="d-f3" style="color:#48bb78">--</strong></span>
+            <span>d4: <strong id="d-f4" style="color:#d69e2e">--</strong></span>
           </div>
           <div style="display:flex;gap:12px;align-items:center">
-            <span>phase: <strong id="d-phase" style="color:#48bb78">--</strong></span>
+            <span>state: <strong id="d-state" style="color:#48bb78">--</strong></span>
             <span>gate: <strong id="d-gate" style="color:#fc8181">--</strong></span>
             <span>count: <strong id="d-count" style="color:#fff;font-size:14px">0</strong></span>
-          </div>
-          <div style="margin-top:4px">
-            <div style="display:flex;align-items:center;gap:6px">
-              <span style="font-size:10px;width:18px">y</span>
-              <div style="flex:1;height:12px;background:#2d3748;border-radius:3px;position:relative;overflow:hidden">
-                <div id="d-bar-base" style="position:absolute;top:0;width:2px;height:100%;background:#718096" title="baseline"></div>
-                <div id="d-bar-peak" style="position:absolute;top:0;width:2px;height:100%;background:#fc8181" title="peak (lowest)"></div>
-                <div id="d-bar-y" style="position:absolute;top:0;width:4px;height:100%;background:#48bb78;border-radius:2px" title="current y"></div>
-              </div>
-            </div>
           </div>
         </div>
         <div class="camera-counter">
@@ -431,30 +408,28 @@ async function renderCamera(app) {
       tracker = pose.startTracking(video, canvas, (count) => {
         countEl.textContent = count;
       }, (d) => {
-        document.getElementById('d-nose').textContent = d.noseDip;
-        document.getElementById('d-shld').textContent = d.shoulderDip;
-        document.getElementById('d-elbow').textContent = d.elbowAngle;
-        document.getElementById('d-minelbow').textContent = d.minElbow;
-        document.getElementById('d-wvar').textContent = d.wristVar || '--';
-        document.getElementById('d-phase').textContent = d.phase;
-        document.getElementById('d-phase').style.color = d.phase === 'DESCENDING' ? '#fc8181' : d.phase === 'ASCENDING' ? '#ecc94b' : '#48bb78';
-        document.getElementById('d-gate').textContent = d.gated;
+        if (mode === 'standard') {
+          document.getElementById('d-f1').textContent = 'angle:' + (d.angle ?? '--');
+          document.getElementById('d-f2').textContent = 'body:' + (d.bodyAngle ?? '--');
+          document.getElementById('d-f3').textContent = 'kneel:' + (d.kneel ?? '--');
+          document.getElementById('d-f4').textContent = '';
+        } else {
+          document.getElementById('d-f1').textContent = 'nDip:' + (d.noseDip ?? '--');
+          document.getElementById('d-f2').textContent = 'sDip:' + (d.shoulderDip ?? '--');
+          document.getElementById('d-f3').textContent = 'elb:' + (d.elbow ?? '--');
+          document.getElementById('d-f4').textContent = 'wVar:' + (d.wVar ?? '--');
+        }
+        const stateKey = d.phase || d.state || '--';
+        document.getElementById('d-state').textContent = stateKey;
+        document.getElementById('d-state').style.color = stateKey === 'DOWN' || stateKey === 'DESCENDING' ? '#fc8181' : stateKey === 'ASCENDING' ? '#ecc94b' : '#48bb78';
+        document.getElementById('d-gate').textContent = d.gated ?? '--';
         document.getElementById('d-gate').style.color = d.gated === 'active' ? '#48bb78' : '#fc8181';
-        document.getElementById('d-count').textContent = d.count;
-        const noseNum = parseFloat(d.noseY) || 0;
-        const noseBase = parseFloat(d.noseBase) || 0;
-        const shldNum = parseFloat(d.shoulderY) || 0;
-        document.getElementById('d-bar-y').style.left = (noseNum * 100) + '%';
-        document.getElementById('d-bar-base').style.left = (noseBase * 100) + '%';
-        document.getElementById('d-bar-peak').style.left = (shldNum * 100) + '%';
-      });
+        document.getElementById('d-count').textContent = d.count ?? 0;
+      }, mode);
 
       trackingInterval = setInterval(() => {
-        if (tracker && tracker.isTracking()) {
-          trackingBadge.classList.remove('hidden');
-        } else {
-          trackingBadge.classList.add('hidden');
-        }
+        if (tracker && tracker.isTracking()) trackingBadge.classList.remove('hidden');
+        else trackingBadge.classList.add('hidden');
       }, 500);
     }
 
@@ -484,12 +459,7 @@ async function renderCamera(app) {
       if (tracker) {
         const log = tracker.getLog();
         const text = log.map(e => JSON.stringify(e)).join('\n');
-        navigator.clipboard.writeText(text).then(() => {
-          showToast('Debug log copied to clipboard (' + log.length + ' events)');
-        }).catch(() => {
-          // Fallback: show in alert
-          prompt('Copy this debug log:', text);
-        });
+        navigator.clipboard.writeText(text).then(() => showToast('Debug log copied (' + log.length + ' events)')).catch(() => prompt('Copy:', text));
       }
     });
 
@@ -498,12 +468,8 @@ async function renderCamera(app) {
       showTutorial(() => startCameraSession());
     });
 
-    try {
-      await startCamera();
-    } catch (err) {
-      showToast('Camera access denied. Please allow camera permissions.');
-      await loadDashboard();
-    }
+    try { await startCamera(); }
+    catch { showToast('Camera access denied.'); await loadDashboard(); }
   }
 }
 
