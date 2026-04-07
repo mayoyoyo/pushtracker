@@ -295,15 +295,19 @@ function showTutorial(onStart) {
   app.innerHTML = `
     <div class="camera-screen" style="background:var(--bg);overflow-y:auto">
       <div style="padding:24px 20px;max-width:400px;margin:0 auto">
-        <h2 style="text-align:center;margin-bottom:8px">${isStd ? 'Standard' : 'Noob'} Mode</h2>
+        <h2 style="text-align:center;margin-bottom:8px">${isStd ? 'Standard Mode' : 'Noob Mode'}</h2>
         <div style="display:flex;justify-content:center;margin-bottom:16px">
           <div style="display:inline-flex;background:var(--surface-2);border-radius:8px;overflow:hidden">
             <button id="mode-noob" style="padding:8px 16px;border:none;font-size:13px;cursor:pointer;background:${!isStd ? 'var(--primary)' : 'transparent'};color:var(--text)">Noob</button>
-            <button id="mode-std" style="padding:8px 16px;border:none;font-size:13px;cursor:pointer;background:${isStd ? 'var(--primary)' : 'transparent'};color:var(--text)">Standard</button>
+            <button id="mode-std" style="padding:8px 16px;border:none;font-size:13px;cursor:pointer;background:${isStd ? 'var(--danger)' : 'transparent'};color:${isStd ? '#1a1a2e' : 'var(--text)'}">Standard</button>
           </div>
         </div>
 
         ${isStd ? `
+        <div style="background:rgba(252,129,129,0.1);border:1px solid var(--danger);border-radius:10px;padding:14px 16px;margin-bottom:16px;text-align:center">
+          <div style="font-size:15px;font-weight:700;color:var(--danger);margin-bottom:4px">Real ones only.</div>
+          <div style="font-size:13px;color:var(--text-dim)">No knee pushups. No shortcuts. Full range of motion, verified.</div>
+        </div>
         <div style="background:var(--surface);border-radius:10px;padding:16px;margin-bottom:16px">
           <div style="font-weight:600;margin-bottom:10px">Side-view setup:</div>
           <ul style="padding-left:18px;line-height:1.8;font-size:14px;color:var(--text-dim)">
@@ -367,7 +371,7 @@ async function renderCamera(app) {
         </div>
         <div id="cam-debug-panel" style="background:rgba(0,0,0,0.85);padding:8px 12px;font-family:monospace;font-size:11px;line-height:1.6;color:#e2e8f0">
           <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:4px">
-            <span style="color:var(--primary);font-weight:bold">${mode === 'standard' ? 'STD' : 'NOOB'}</span>
+            <span style="color:${mode === 'standard' ? 'var(--danger)' : 'var(--primary)'};font-weight:bold">${mode === 'standard' ? 'STANDARD' : 'NOOB'}</span>
             <span>d1: <strong id="d-f1" style="color:#ecc94b">--</strong></span>
             <span>d2: <strong id="d-f2" style="color:#63b3ed">--</strong></span>
             <span>d3: <strong id="d-f3" style="color:#48bb78">--</strong></span>
