@@ -1,6 +1,7 @@
 import { join } from "path";
 import { getDb } from "./db";
 import { handleApiRequest } from "./api";
+import { startCron } from "./cron";
 
 const PUBLIC_DIR = join(import.meta.dir, "..", "public");
 const PORT = parseInt(process.env.PORT || "3000");
@@ -31,4 +32,5 @@ const server = Bun.serve({
   },
 });
 
+startCron();
 console.log(`PushTracker running on http://localhost:${server.port}`);
