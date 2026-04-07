@@ -277,15 +277,23 @@ function startStandardTracking(video, canvas, onCount, onDebug) {
     }
 
     // --- TRACKING (gate is READY) ---
-    lostFrames = 0;
-
     // Check if landmarks are still visible
     if (!allLandmarksVisible(side)) {
-      lostFrames = 1; // start counting lost frames
+      lostFrames++;
+      if (lostFrames >= LOST_FRAMES_THRESHOLD) {
+        gateState = 'NOT_READY';
+        gateFrames = 0;
+        phase = 'READY';
+        shoulderYBuf.length = 0;
+        playTone(330, 0.3);
+        log('PAUSED', { reason: 'landmarks-lost' });
+      }
       if (onDebug) onDebug({ phase, count, gated: 'losing-landmarks', mode: 'STANDARD' });
       animationFrameId = requestAnimationFrame(processFrame);
       return;
     }
+
+    lostFrames = 0;
 
     const smoothedShoulderY = smoothValue(shoulderYBuf, side.shoulder.y);
     const kAngle = kneeAngle(side);
@@ -334,7 +342,7 @@ function startStandardTracking(video, canvas, onCount, onDebug) {
 
         if (reason) {
           log('REJECT', { reason, frames, sDip: totalDip.toFixed(3), ankleVar: aVar.toFixed(4), kneeAngle: kAngle !== null ? Math.round(kAngle) : '--' });
-          phase = 'READY'; shoulderBaseY = smoothedShoulderY; shoulderPeakY = smoothedShoulderY;
+          phase = 'READY'; shoulderBaseY = smoothedShoulderY; shoulderPeakY = smoothedShoulderY; ankleYSamples = [];
         } else {
           phase = 'ASCENDING';
           log('ASCEND', { sDip: totalDip.toFixed(3), ankleVar: aVar.toFixed(4), kneeAngle: kAngle !== null ? Math.round(kAngle) : '--' });
@@ -343,12 +351,13 @@ function startStandardTracking(video, canvas, onCount, onDebug) {
     }
 
     if (phase === 'ASCENDING') {
+      if (smoothedShoulderY > shoulderPeakY) shoulderPeakY = smoothedShoulderY;
       const totalDip = shoulderPeakY - shoulderBaseY;
       const returnAmt = shoulderPeakY - smoothedShoulderY;
       if (returnAmt > totalDip * 0.6) {
         count++; onCount(count);
         log('COUNT', { n: count, sDip: totalDip.toFixed(3) });
-        phase = 'READY'; shoulderBaseY = smoothedShoulderY; shoulderPeakY = smoothedShoulderY;
+        phase = 'READY'; shoulderBaseY = smoothedShoulderY; shoulderPeakY = smoothedShoulderY; ankleYSamples = [];
       }
     }
 
