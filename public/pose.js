@@ -160,9 +160,9 @@ function startStandardTracking(video, canvas, onCount, onDebug) {
   let count = 0, tracking = false, frameNum = 0;
   const elbowBuf = [], shoulderYBuf = [];
 
-  const UP_ANGLE = 145, DOWN_ANGLE = 110;
+  const UP_ANGLE = 145, DOWN_ANGLE = 115;
   const MIN_DOWN_FRAMES = 20;
-  const MIN_SHOULDER_DIP = 0.02;
+  const MIN_SHOULDER_DIP = 0.01;
   const MAX_ANKLE_VAR = 0.06; // loosened — real pushups have 0.008-0.05 ankle movement
   const MIN_DIFF_RATIO = 2.0; // shoulder must move at least 2x more than ankle
   let state = 'UP';
