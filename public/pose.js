@@ -158,14 +158,20 @@ function startNoobTracking(video, canvas, onCount, onDebug) {
 function startStandardTracking(video, canvas, onCount, onDebug) {
   const ctx = canvas.getContext('2d');
   let count = 0, tracking = false, frameNum = 0;
-  const elbowBuf = [];
+  const elbowBuf = [], shoulderYBuf = [];
 
   const UP_ANGLE = 150, DOWN_ANGLE = 100;
-  const MAX_HIP_KNEE_PROXIMITY = 0.08; // tighter = only catches truly tucked knees from side view
-  const MIN_DOWN_FRAMES = 15; // ~0.5s at 30fps — prevents counting laptop jiggle
+  const MAX_HIP_KNEE_PROXIMITY = 0.08;
+  const MIN_DOWN_FRAMES = 25; // ~0.8s at 30fps
+  const MIN_SHOULDER_DIP = 0.03; // shoulder must visibly drop
+  const MAX_ANKLE_MOVEMENT = 0.02; // ankle must stay planted (camera jiggle = both move)
+  const MIN_PLANK_ANGLE = 140; // shoulder-hip-ankle must be roughly straight
   let state = 'UP';
   let kneelingFrames = 0, totalLBFrames = 0;
   let descentStartFrame = 0;
+  let shoulderYAtDown = 0, shoulderPeakY = 0; // track shoulder dip during DOWN
+  let ankleYSamples = []; // track ankle stability
+  let plankAngleSamples = []; // track body alignment
 
   const eventLog = [];
   function log(type, data) { eventLog.push({ t: (performance.now()/1000).toFixed(2), frame: frameNum, type, ...data }); if (eventLog.length > 200) eventLog.shift(); }
@@ -194,15 +200,26 @@ function startStandardTracking(video, canvas, onCount, onDebug) {
 
       const rawAngle = calculateAngle(side.shoulder, side.elbow, side.wrist);
       const angle = Math.round(smoothValue(elbowBuf, rawAngle));
+      const smoothedShoulderY = smoothValue(shoulderYBuf, side.shoulder.y);
 
-      // Body alignment: shoulder-hip angle (should be roughly horizontal)
-      let bodyAngle = '--';
-      if (side.hip.visibility > MIN_VISIBILITY) {
-        bodyAngle = Math.round(Math.abs(Math.atan2(side.hip.y - side.shoulder.y, side.hip.x - side.shoulder.x) * 180 / Math.PI));
+      // Plank angle: shoulder-hip-ankle (should be ~180 for straight body)
+      let plankAngle = '--';
+      if (side.hip.visibility > MIN_VISIBILITY && side.ankle.visibility > MIN_VISIBILITY) {
+        plankAngle = Math.round(calculateAngle(side.shoulder, side.hip, side.ankle));
       }
 
-      // Kneeling detection
+      // Track data during DOWN phase
       if (state === 'DOWN') {
+        // Shoulder dip
+        if (smoothedShoulderY > shoulderPeakY) shoulderPeakY = smoothedShoulderY;
+
+        // Ankle stability
+        if (side.ankle.visibility > MIN_VISIBILITY) ankleYSamples.push(side.ankle.y);
+
+        // Plank angle samples
+        if (typeof plankAngle === 'number') plankAngleSamples.push(plankAngle);
+
+        // Kneeling detection
         if (side.hip.visibility > MIN_VISIBILITY && side.knee.visibility > MIN_VISIBILITY) {
           totalLBFrames++;
           if (Math.abs(side.hip.y - side.knee.y) < MAX_HIP_KNEE_PROXIMITY) kneelingFrames++;
@@ -210,33 +227,63 @@ function startStandardTracking(video, canvas, onCount, onDebug) {
       }
 
       const kneelingRatio = totalLBFrames > 0 ? kneelingFrames / totalLBFrames : 0;
+      const shoulderDip = shoulderPeakY - shoulderYAtDown;
 
-      if (onDebug) onDebug({ angle, bodyAngle, state, kneel: kneelingRatio.toFixed(2), count, gated: 'active', mode: 'STANDARD' });
+      // Ankle variance (live)
+      let ankleVar = '--';
+      if (ankleYSamples.length >= 3) {
+        const m = ankleYSamples.reduce((a,b)=>a+b,0)/ankleYSamples.length;
+        ankleVar = Math.sqrt(ankleYSamples.reduce((s,v)=>s+(v-m)**2,0)/ankleYSamples.length).toFixed(4);
+      }
+
+      // Average plank angle
+      let avgPlank = '--';
+      if (plankAngleSamples.length > 0) avgPlank = Math.round(plankAngleSamples.reduce((a,b)=>a+b,0)/plankAngleSamples.length);
+
+      if (onDebug) onDebug({ angle, sDip: state === 'DOWN' ? shoulderDip.toFixed(3) : '--', ankleVar, plank: avgPlank, kneel: kneelingRatio.toFixed(2), state, count, gated: 'active', mode: 'STANDARD' });
 
       if (angle < DOWN_ANGLE && state === 'UP') {
         state = 'DOWN';
-        kneelingFrames = 0; totalLBFrames = 0; descentStartFrame = frameNum;
-        log('DOWN', { angle });
+        descentStartFrame = frameNum;
+        shoulderYAtDown = smoothedShoulderY;
+        shoulderPeakY = smoothedShoulderY;
+        ankleYSamples = [];
+        plankAngleSamples = [];
+        kneelingFrames = 0; totalLBFrames = 0;
+        log('DOWN', { angle, shoulderY: smoothedShoulderY.toFixed(3) });
       }
 
       if (angle > UP_ANGLE && state === 'DOWN') {
-        const framesInDown = frameNum - descentStartFrame;
-        if (framesInDown < MIN_DOWN_FRAMES) {
-          // Too fast — jiggle, not a real pushup
-          log('REJECT', { reason: 'too-fast', frames: framesInDown, angle });
-          state = 'UP'; kneelingFrames = 0; totalLBFrames = 0;
-        } else {
-          const kr = totalLBFrames > 0 ? kneelingFrames / totalLBFrames : 0;
-          if (kr > 0.5) {
-            log('REJECT', { reason: 'kneeling', kneel: kr.toFixed(2), angle, frames: framesInDown });
-            state = 'UP'; kneelingFrames = 0; totalLBFrames = 0;
-          } else {
-            state = 'UP';
-            count++; onCount(count);
-            log('COUNT', { n: count, angle, kneel: kr.toFixed(2), frames: framesInDown });
-            kneelingFrames = 0; totalLBFrames = 0;
-          }
+        const frames = frameNum - descentStartFrame;
+
+        // Compute all checks
+        const sDip = shoulderPeakY - shoulderYAtDown;
+        let aVar = 0;
+        if (ankleYSamples.length >= 3) {
+          const m = ankleYSamples.reduce((a,b)=>a+b,0)/ankleYSamples.length;
+          aVar = Math.sqrt(ankleYSamples.reduce((s,v)=>s+(v-m)**2,0)/ankleYSamples.length);
         }
+        const hasAnkle = ankleYSamples.length >= 3;
+        const aPlank = plankAngleSamples.length > 0 ? plankAngleSamples.reduce((a,b)=>a+b,0)/plankAngleSamples.length : 999;
+        const hasPlank = plankAngleSamples.length > 0;
+        const kr = totalLBFrames > 0 ? kneelingFrames / totalLBFrames : 0;
+
+        // Determine pass/fail
+        let reason = null;
+        if (frames < MIN_DOWN_FRAMES) reason = 'too-fast';
+        else if (hasAnkle && aVar > MAX_ANKLE_MOVEMENT) reason = 'camera-move';
+        else if (sDip < MIN_SHOULDER_DIP) reason = 'no-shoulder-dip';
+        else if (hasPlank && aPlank < MIN_PLANK_ANGLE) reason = 'not-plank';
+        else if (kr > 0.5) reason = 'kneeling';
+
+        if (reason) {
+          log('REJECT', { reason, frames, sDip: sDip.toFixed(3), ankleVar: aVar.toFixed(4), plank: hasPlank ? Math.round(aPlank) : '--', kneel: kr.toFixed(2), angle });
+        } else {
+          count++; onCount(count);
+          log('COUNT', { n: count, frames, sDip: sDip.toFixed(3), ankleVar: aVar.toFixed(4), plank: hasPlank ? Math.round(aPlank) : '--', kneel: kr.toFixed(2), angle });
+        }
+        state = 'UP';
+        kneelingFrames = 0; totalLBFrames = 0;
       }
     } else { tracking = false; if (onDebug) onDebug({ state, count, gated: 'no-pose', mode: 'STANDARD' }); }
     animationFrameId = requestAnimationFrame(processFrame);

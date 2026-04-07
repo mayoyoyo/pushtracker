@@ -413,10 +413,10 @@ async function renderCamera(app) {
         countEl.textContent = count;
       }, (d) => {
         if (mode === 'standard') {
-          document.getElementById('d-f1').textContent = 'angle:' + (d.angle ?? '--');
-          document.getElementById('d-f2').textContent = 'body:' + (d.bodyAngle ?? '--');
-          document.getElementById('d-f3').textContent = 'kneel:' + (d.kneel ?? '--');
-          document.getElementById('d-f4').textContent = '';
+          document.getElementById('d-f1').textContent = 'elb:' + (d.angle ?? '--');
+          document.getElementById('d-f2').textContent = 'sDip:' + (d.sDip ?? '--');
+          document.getElementById('d-f3').textContent = 'aVar:' + (d.ankleVar ?? '--');
+          document.getElementById('d-f4').textContent = 'plk:' + (d.plank ?? '--');
         } else {
           document.getElementById('d-f1').textContent = 'nDip:' + (d.noseDip ?? '--');
           document.getElementById('d-f2').textContent = 'sDip:' + (d.shoulderDip ?? '--');
