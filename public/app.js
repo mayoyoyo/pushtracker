@@ -376,8 +376,8 @@ async function renderCamera(app) {
           <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:4px">
             <span>nose: <strong id="d-nose" style="color:#ecc94b">--</strong></span>
             <span>shld: <strong id="d-shld" style="color:#63b3ed">--</strong></span>
-            <span>nDip: <strong id="d-ndip" style="color:#ecc94b">--</strong></span>
-            <span>sDip: <strong id="d-sdip" style="color:#63b3ed">--</strong></span>
+            <span>elbow: <strong id="d-elbow" style="color:#48bb78">--</strong></span>
+            <span>minE: <strong id="d-minelbow" style="color:#fc8181">--</strong></span>
           </div>
           <div style="display:flex;gap:12px;align-items:center">
             <span>phase: <strong id="d-phase" style="color:#48bb78">--</strong></span>
@@ -424,10 +424,10 @@ async function renderCamera(app) {
       tracker = pose.startTracking(video, canvas, (count) => {
         countEl.textContent = count;
       }, (d) => {
-        document.getElementById('d-nose').textContent = d.noseY;
-        document.getElementById('d-shld').textContent = d.shoulderY;
-        document.getElementById('d-ndip').textContent = d.noseDip;
-        document.getElementById('d-sdip').textContent = d.shoulderDip;
+        document.getElementById('d-nose').textContent = d.noseDip;
+        document.getElementById('d-shld').textContent = d.shoulderDip;
+        document.getElementById('d-elbow').textContent = d.elbowAngle;
+        document.getElementById('d-minelbow').textContent = d.minElbow;
         document.getElementById('d-phase').textContent = d.phase;
         document.getElementById('d-phase').style.color = d.phase === 'DESCENDING' ? '#fc8181' : d.phase === 'ASCENDING' ? '#ecc94b' : '#48bb78';
         document.getElementById('d-gate').textContent = d.gated;
