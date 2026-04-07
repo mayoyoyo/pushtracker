@@ -90,8 +90,8 @@ Simple, fast to query, no historical recomputation needed.
 
 - **Day boundary:** Each user's "day" runs from 7am local to 7am local (not midnight).
 - **Storage:** IANA timezone string (e.g., `America/New_York`) + pre-computed `next_day_boundary` in UTC.
-- **Detection:** On app open, client reads `Intl.DateTimeFormat().resolvedOptions().timeZone` (no location permissions needed — reads OS timezone setting). If it differs from stored timezone, prompt: "Looks like you're in [new timezone]. Update?"
-- **On timezone change:** Server recalculates `next_day_boundary` to the next 7am in the new timezone. Current in-progress day may extend or shorten.
+- **Detection:** On app open, client reads `Intl.DateTimeFormat().resolvedOptions().timeZone` (no location permissions needed — reads OS timezone setting). If it differs from stored timezone, server automatically updates the timezone and recalculates `next_day_boundary`. A dismissable notification informs the user: "We noticed you changed time zones — your daily reset has been updated."
+- **On timezone change:** Current in-progress day may extend or shorten.
 - **DST:** Handled automatically by using IANA timezone IDs and a proper timezone library (Temporal or Luxon), never raw UTC offsets.
 
 ## Authentication
