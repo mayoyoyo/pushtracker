@@ -160,12 +160,13 @@ function startStandardTracking(video, canvas, onCount, onDebug) {
   let count = 0, tracking = false, frameNum = 0;
   const elbowBuf = [], shoulderYBuf = [];
 
-  const UP_ANGLE = 150, DOWN_ANGLE = 100;
+  const UP_ANGLE = 145, DOWN_ANGLE = 110; // loosened for varying camera angles
   const MAX_HIP_KNEE_PROXIMITY = 0.08;
-  const MIN_DOWN_FRAMES = 25; // ~0.8s at 30fps
+  const MIN_DOWN_FRAMES = 20; // ~0.67s at 30fps
   const MIN_SHOULDER_DIP = 0.03; // shoulder must visibly drop
-  const MAX_ANKLE_MOVEMENT = 0.02; // ankle must stay planted (camera jiggle = both move)
-  const MIN_PLANK_ANGLE = 140; // shoulder-hip-ankle must be roughly straight
+  const MIN_SHOULDER_DIP_NO_ANKLE = 0.06; // stricter when no ankle data (can't detect camera jiggle)
+  const MAX_ANKLE_MOVEMENT = 0.02;
+  const MIN_PLANK_ANGLE = 140;
   let state = 'UP';
   let kneelingFrames = 0, totalLBFrames = 0;
   let descentStartFrame = 0;
@@ -269,10 +270,13 @@ function startStandardTracking(video, canvas, onCount, onDebug) {
         const kr = totalLBFrames > 0 ? kneelingFrames / totalLBFrames : 0;
 
         // Determine pass/fail
+        // When no ankle data, use stricter shoulder dip to compensate
+        const reqDip = hasAnkle ? MIN_SHOULDER_DIP : MIN_SHOULDER_DIP_NO_ANKLE;
+
         let reason = null;
         if (frames < MIN_DOWN_FRAMES) reason = 'too-fast';
         else if (hasAnkle && aVar > MAX_ANKLE_MOVEMENT) reason = 'camera-move';
-        else if (sDip < MIN_SHOULDER_DIP) reason = 'no-shoulder-dip';
+        else if (sDip < reqDip) reason = 'no-shoulder-dip';
         else if (hasPlank && aPlank < MIN_PLANK_ANGLE) reason = 'not-plank';
         else if (kr > 0.5) reason = 'kneeling';
 
