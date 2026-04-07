@@ -312,15 +312,15 @@ function showTutorial(onStart) {
           <div style="font-weight:600;margin-bottom:10px">Side-view setup:</div>
           <ul style="padding-left:18px;line-height:1.8;font-size:14px;color:var(--text-dim)">
             <li><strong style="color:var(--text)">Place camera to your side</strong> -- it needs to see your full profile</li>
-            <li><strong style="color:var(--text)">Full body visible</strong> -- shoulders, elbows, wrists, hips, and knees</li>
+            <li><strong style="color:var(--text)">Full body visible</strong> -- head to feet, including ankles</li>
             <li><strong style="color:var(--text)">Prop it 1-2 feet off the ground</strong> -- slightly elevated works best</li>
-            <li><strong style="color:var(--text)">Rejects knee pushups</strong> -- must be on toes with legs extended</li>
+            <li><strong style="color:var(--text)">Wait for the chime</strong> -- a sound plays when the camera is ready</li>
           </ul>
         </div>
         <div style="background:var(--surface);border-radius:10px;padding:16px;margin-bottom:20px">
           <div style="font-weight:600;margin-bottom:10px">How it works:</div>
           <p style="font-size:14px;color:var(--text-dim);line-height:1.6">
-            Tracks your elbow angle from the side. Counts when elbows bend past 100\u00b0 (down) and extend past 150\u00b0 (up). Also checks that hips and knees are far apart (full pushup position, not kneeling).
+            Tracks your shoulder movement from the side. Waits until it can see your full body, then counts reps by vertical shoulder displacement. Rejects knee pushups and camera movement.
           </p>
         </div>
         ` : `
@@ -413,10 +413,10 @@ async function renderCamera(app) {
         countEl.textContent = count;
       }, (d) => {
         if (mode === 'standard') {
-          document.getElementById('d-f1').textContent = 'elb:' + (d.angle ?? '--');
-          document.getElementById('d-f2').textContent = 'sDip:' + (d.sDip ?? '--');
-          document.getElementById('d-f3').textContent = 'aVar:' + (d.ankleVar ?? '--');
-          document.getElementById('d-f4').textContent = 'wVar:' + (d.wristVar ?? '--');
+          document.getElementById('d-f1').textContent = 'sDip:' + (d.sDip ?? '--');
+          document.getElementById('d-f2').textContent = 'aVar:' + (d.ankleVar ?? '--');
+          document.getElementById('d-f3').textContent = 'knee:' + (d.kneeAng ?? '--');
+          document.getElementById('d-f4').textContent = d.gateProgress ? 'gate:' + d.gateProgress : (d.missing && d.missing !== 'none' ? 'need:' + d.missing : '');
         } else {
           document.getElementById('d-f1').textContent = 'nDip:' + (d.noseDip ?? '--');
           document.getElementById('d-f2').textContent = 'sDip:' + (d.shoulderDip ?? '--');
