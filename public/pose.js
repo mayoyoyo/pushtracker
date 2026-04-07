@@ -6,6 +6,20 @@ let animationFrameId = null;
 const MIN_VISIBILITY = 0.5;
 const SMOOTHING_WINDOW = 9;
 
+function playTone(freq, duration, type = 'sine') {
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = type;
+  osc.frequency.value = freq;
+  gain.gain.value = 0.3;
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start();
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+  osc.stop(ctx.currentTime + duration);
+}
+
 export async function initPoseDetection() {
   if (poseLandmarker) return poseLandmarker;
   const vision = await FilesetResolver.forVisionTasks(
@@ -158,18 +172,26 @@ function startNoobTracking(video, canvas, onCount, onDebug) {
 function startStandardTracking(video, canvas, onCount, onDebug) {
   const ctx = canvas.getContext('2d');
   let count = 0, tracking = false, frameNum = 0;
-  const elbowBuf = [], shoulderYBuf = [];
+  const shoulderYBuf = [];
 
-  const UP_ANGLE = 145, DOWN_ANGLE = 115;
-  const MIN_DOWN_FRAMES = 20;
-  const MIN_SHOULDER_DIP = 0.01;
-  const MAX_ANKLE_VAR = 0.06; // loosened — real pushups have 0.008-0.05 ankle movement
-  const MIN_DIFF_RATIO = 2.0; // shoulder must move at least 2x more than ankle
-  let state = 'UP';
+  // Thresholds
+  const MIN_DIP = 0.03;
+  const MIN_FRAMES = 15;
+  const MAX_ANKLE_VAR = 0.06;
+  const MIN_KNEE_ANGLE = 150;
+  const READY_FRAMES_NEEDED = 30;
+  const LOST_FRAMES_THRESHOLD = 30;
+
+  // Ready gate state
+  let gateState = 'NOT_READY'; // NOT_READY | READY
+  let gateFrames = 0; // consecutive frames with all landmarks visible
+  let lostFrames = 0; // consecutive frames with landmarks missing
+
+  // Tracking state
+  let phase = 'READY'; // READY | DESCENDING | ASCENDING
+  let shoulderBaseY = 0, shoulderPeakY = 0;
   let descentStartFrame = 0;
-  let shoulderYAtDown = 0, shoulderPeakY = 0;
   let ankleYSamples = [];
-  let wristYSamples = []; // fallback check when no ankle visible
 
   const eventLog = [];
   function log(type, data) { eventLog.push({ t: (performance.now()/1000).toFixed(2), frame: frameNum, type, ...data }); if (eventLog.length > 200) eventLog.shift(); }
@@ -181,6 +203,18 @@ function startStandardTracking(video, canvas, onCount, onDebug) {
     return { shoulder: lm[12], elbow: lm[14], wrist: lm[16], hip: lm[24], knee: lm[26], ankle: lm[28], vis: rVis };
   }
 
+  function kneeAngle(side) {
+    if (side.hip.visibility < MIN_VISIBILITY || side.knee.visibility < MIN_VISIBILITY || side.ankle.visibility < MIN_VISIBILITY) return null;
+    return calculateAngle(side.hip, side.knee, side.ankle);
+  }
+
+  function allLandmarksVisible(side) {
+    return side.shoulder.visibility > MIN_VISIBILITY
+      && side.hip.visibility > MIN_VISIBILITY
+      && side.knee.visibility > MIN_VISIBILITY
+      && side.ankle.visibility > MIN_VISIBILITY;
+  }
+
   function processFrame() {
     if (!poseLandmarker || video.paused || video.ended) { animationFrameId = requestAnimationFrame(processFrame); return; }
     frameNum++;
@@ -188,79 +222,136 @@ function startStandardTracking(video, canvas, onCount, onDebug) {
     const result = poseLandmarker.detectForVideo(video, performance.now());
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    if (result.landmarks && result.landmarks.length > 0) {
-      const lm = result.landmarks[0];
-      tracking = true;
-      drawSkeleton(ctx, lm);
+    if (!result.landmarks || result.landmarks.length === 0) {
+      tracking = false;
+      if (gateState === 'READY') {
+        lostFrames++;
+        if (lostFrames >= LOST_FRAMES_THRESHOLD) {
+          gateState = 'NOT_READY';
+          gateFrames = 0;
+          phase = 'READY';
+          shoulderYBuf.length = 0;
+          playTone(330, 0.3); // low alert tone
+          log('PAUSED', { reason: 'landmarks-lost' });
+        }
+      }
+      if (onDebug) onDebug({ phase, count, gated: gateState === 'READY' ? 'pausing' : 'no-pose', mode: 'STANDARD' });
+      animationFrameId = requestAnimationFrame(processFrame);
+      return;
+    }
 
-      const side = pickSide(lm);
-      if (side.vis < MIN_VISIBILITY) { if (onDebug) onDebug({ state, count, gated: 'low-vis', mode: 'STANDARD' }); animationFrameId = requestAnimationFrame(processFrame); return; }
+    const lm = result.landmarks[0];
+    tracking = true;
+    drawSkeleton(ctx, lm);
+    const side = pickSide(lm);
 
-      const rawAngle = calculateAngle(side.shoulder, side.elbow, side.wrist);
-      const angle = Math.round(smoothValue(elbowBuf, rawAngle));
-      const smoothedShoulderY = smoothValue(shoulderYBuf, side.shoulder.y);
-
-      // Track data during DOWN phase
-      if (state === 'DOWN') {
-        if (smoothedShoulderY > shoulderPeakY) shoulderPeakY = smoothedShoulderY;
-        if (side.ankle.visibility > MIN_VISIBILITY) ankleYSamples.push(side.ankle.y);
-        if (side.wrist.visibility > MIN_VISIBILITY) wristYSamples.push(side.wrist.y);
+    // --- READY GATE ---
+    if (gateState === 'NOT_READY') {
+      if (allLandmarksVisible(side)) {
+        gateFrames++;
+      } else {
+        gateFrames = 0;
       }
 
-      const shoulderDip = shoulderPeakY - shoulderYAtDown;
+      const missing = [];
+      if (side.shoulder.visibility <= MIN_VISIBILITY) missing.push('shoulder');
+      if (side.hip.visibility <= MIN_VISIBILITY) missing.push('hip');
+      if (side.knee.visibility <= MIN_VISIBILITY) missing.push('knee');
+      if (side.ankle.visibility <= MIN_VISIBILITY) missing.push('ankle');
 
-      // Live stats for debug
-      let ankleVar = '--', wristVar = '--';
-      if (ankleYSamples.length >= 3) { const m = ankleYSamples.reduce((a,b)=>a+b,0)/ankleYSamples.length; ankleVar = Math.sqrt(ankleYSamples.reduce((s,v)=>s+(v-m)**2,0)/ankleYSamples.length).toFixed(4); }
-      if (wristYSamples.length >= 3) { const m = wristYSamples.reduce((a,b)=>a+b,0)/wristYSamples.length; wristVar = Math.sqrt(wristYSamples.reduce((s,v)=>s+(v-m)**2,0)/wristYSamples.length).toFixed(4); }
+      if (onDebug) onDebug({ gateProgress: `${gateFrames}/${READY_FRAMES_NEEDED}`, missing: missing.join(',') || 'none', phase: 'SETUP', count, gated: 'not-ready', mode: 'STANDARD' });
 
-      if (onDebug) onDebug({ angle, sDip: state === 'DOWN' ? shoulderDip.toFixed(3) : '--', ankleVar, wristVar, state, count, gated: 'active', mode: 'STANDARD' });
+      if (gateFrames >= READY_FRAMES_NEEDED) {
+        gateState = 'READY';
+        lostFrames = 0;
+        shoulderBaseY = side.shoulder.y;
+        shoulderPeakY = side.shoulder.y;
+        shoulderYBuf.length = 0;
+        phase = 'READY';
+        playTone(880, 0.15); // high ready chime
+        setTimeout(() => playTone(1100, 0.15), 170);
+        log('READY', { shoulderY: side.shoulder.y.toFixed(3) });
+      }
+      animationFrameId = requestAnimationFrame(processFrame);
+      return;
+    }
 
-      if (angle < DOWN_ANGLE && state === 'UP') {
-        state = 'DOWN';
+    // --- TRACKING (gate is READY) ---
+    lostFrames = 0;
+
+    // Check if landmarks are still visible
+    if (!allLandmarksVisible(side)) {
+      lostFrames = 1; // start counting lost frames
+      if (onDebug) onDebug({ phase, count, gated: 'losing-landmarks', mode: 'STANDARD' });
+      animationFrameId = requestAnimationFrame(processFrame);
+      return;
+    }
+
+    const smoothedShoulderY = smoothValue(shoulderYBuf, side.shoulder.y);
+    const kAngle = kneeAngle(side);
+    const shoulderDip = smoothedShoulderY - shoulderBaseY;
+
+    // Track ankle during descent
+    if (phase === 'DESCENDING') {
+      if (smoothedShoulderY > shoulderPeakY) shoulderPeakY = smoothedShoulderY;
+      ankleYSamples.push(side.ankle.y);
+    }
+
+    // Live stats
+    let ankleVar = '--';
+    if (ankleYSamples.length >= 3) { const m = ankleYSamples.reduce((a,b)=>a+b,0)/ankleYSamples.length; ankleVar = Math.sqrt(ankleYSamples.reduce((s,v)=>s+(v-m)**2,0)/ankleYSamples.length).toFixed(4); }
+
+    if (onDebug) onDebug({ sDip: shoulderDip.toFixed(3), ankleVar, kneeAng: kAngle !== null ? Math.round(kAngle) : '--', phase, count, gated: 'active', mode: 'STANDARD' });
+
+    // --- PHASE MACHINE ---
+    if (phase === 'READY') {
+      // Adapt baseline slowly
+      shoulderBaseY = smoothedShoulderY * 0.05 + shoulderBaseY * 0.95;
+      if (shoulderDip > MIN_DIP * 0.5) {
+        phase = 'DESCENDING';
         descentStartFrame = frameNum;
-        shoulderYAtDown = smoothedShoulderY;
         shoulderPeakY = smoothedShoulderY;
         ankleYSamples = [];
-        wristYSamples = [];
-        log('DOWN', { angle, shoulderY: smoothedShoulderY.toFixed(3) });
+        log('DESCEND', { shoulderY: smoothedShoulderY.toFixed(3), baseline: shoulderBaseY.toFixed(3) });
       }
+    }
 
-      if (angle > UP_ANGLE && state === 'DOWN') {
+    if (phase === 'DESCENDING') {
+      const totalDip = shoulderPeakY - shoulderBaseY;
+      const returnAmt = shoulderPeakY - smoothedShoulderY;
+
+      if (returnAmt > totalDip * 0.3 && totalDip > MIN_DIP) {
         const frames = frameNum - descentStartFrame;
-        const sDip = shoulderPeakY - shoulderYAtDown;
 
         // Ankle variance
         let aVar = 0;
         if (ankleYSamples.length >= 3) { const m = ankleYSamples.reduce((a,b)=>a+b,0)/ankleYSamples.length; aVar = Math.sqrt(ankleYSamples.reduce((s,v)=>s+(v-m)**2,0)/ankleYSamples.length); }
-        const hasAnkle = ankleYSamples.length >= 3;
-
-        // Wrist variance (fallback when no ankle)
-        let wVar = 0;
-        if (wristYSamples.length >= 3) { const m = wristYSamples.reduce((a,b)=>a+b,0)/wristYSamples.length; wVar = Math.sqrt(wristYSamples.reduce((s,v)=>s+(v-m)**2,0)/wristYSamples.length); }
-        const hasWrist = wristYSamples.length >= 3;
-
-        // Differential ratio: shoulder must move way more than ankle (wrist moves too much during pushups to be a reliable anchor)
-        const anchorVar = hasAnkle ? aVar : 0;
-        const diffRatio = anchorVar > 0.001 ? sDip / anchorVar : (sDip > MIN_SHOULDER_DIP ? 999 : 0);
 
         let reason = null;
-        if (frames < MIN_DOWN_FRAMES) reason = 'too-fast';
-        else if (sDip < MIN_SHOULDER_DIP) reason = 'no-shoulder-dip';
-        else if (hasAnkle && anchorVar > MAX_ANKLE_VAR) reason = 'camera-move';
-        else if (hasAnkle && diffRatio < MIN_DIFF_RATIO) reason = 'low-diff-ratio';
-        else if (!hasAnkle && !hasWrist) reason = 'no-reference-point';
-        else if (!hasAnkle && sDip < 0.08) reason = 'no-anchor-low-dip';
+        if (frames < MIN_FRAMES) reason = 'too-fast';
+        else if (aVar > MAX_ANKLE_VAR) reason = 'camera-move';
+        else if (kAngle !== null && kAngle < MIN_KNEE_ANGLE) reason = 'kneeling';
 
         if (reason) {
-          log('REJECT', { reason, frames, sDip: sDip.toFixed(3), ankleVar: aVar.toFixed(4), wristVar: wVar.toFixed(4), diffRatio: diffRatio.toFixed(1), angle });
+          log('REJECT', { reason, frames, sDip: totalDip.toFixed(3), ankleVar: aVar.toFixed(4), kneeAngle: kAngle !== null ? Math.round(kAngle) : '--' });
+          phase = 'READY'; shoulderBaseY = smoothedShoulderY; shoulderPeakY = smoothedShoulderY;
         } else {
-          count++; onCount(count);
-          log('COUNT', { n: count, frames, sDip: sDip.toFixed(3), ankleVar: aVar.toFixed(4), wristVar: wVar.toFixed(4), diffRatio: diffRatio.toFixed(1), angle });
+          phase = 'ASCENDING';
+          log('ASCEND', { sDip: totalDip.toFixed(3), ankleVar: aVar.toFixed(4), kneeAngle: kAngle !== null ? Math.round(kAngle) : '--' });
         }
-        state = 'UP';
       }
-    } else { tracking = false; if (onDebug) onDebug({ state, count, gated: 'no-pose', mode: 'STANDARD' }); }
+    }
+
+    if (phase === 'ASCENDING') {
+      const totalDip = shoulderPeakY - shoulderBaseY;
+      const returnAmt = shoulderPeakY - smoothedShoulderY;
+      if (returnAmt > totalDip * 0.6) {
+        count++; onCount(count);
+        log('COUNT', { n: count, sDip: totalDip.toFixed(3) });
+        phase = 'READY'; shoulderBaseY = smoothedShoulderY; shoulderPeakY = smoothedShoulderY;
+      }
+    }
+
     animationFrameId = requestAnimationFrame(processFrame);
   }
   animationFrameId = requestAnimationFrame(processFrame);
