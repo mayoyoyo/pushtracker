@@ -69,7 +69,9 @@ export function startTracking(video, canvas, onCount, onDebug) {
   let noseBaselineY = 0;
   let shoulderBaselineY = 0;
   let shoulderPeakY = 0;
-  let minElbowDuringDescent = 180; // track lowest elbow angle during descent
+  let minElbowDuringDescent = 180;
+  let wristYSamples = []; // track wrist positions during descent
+  const MAX_WRIST_VARIANCE = 0.015; // wrists must stay planted (low movement)
 
   const eventLog = [];
   function logEvent(type, data) {
@@ -120,6 +122,18 @@ export function startTracking(video, canvas, onCount, onDebug) {
       const { angle: rawElbow } = getBestElbowAngle(landmarks);
       const elbowAngle = rawElbow !== null ? Math.round(smoothValue(elbowAngleBuffer, rawElbow)) : null;
 
+      // Wrist y-position (average of visible wrists)
+      const lWrist = landmarks[15];
+      const rWrist = landmarks[16];
+      let wristY = null;
+      if (lWrist.visibility > MIN_VISIBILITY && rWrist.visibility > MIN_VISIBILITY) {
+        wristY = (lWrist.y + rWrist.y) / 2;
+      } else if (lWrist.visibility > MIN_VISIBILITY) {
+        wristY = lWrist.y;
+      } else if (rWrist.visibility > MIN_VISIBILITY) {
+        wristY = rWrist.y;
+      }
+
       if (noseBaselineY === 0) {
         noseBaselineY = smoothedNoseY;
         nosePeakY = smoothedNoseY;
@@ -131,6 +145,13 @@ export function startTracking(video, canvas, onCount, onDebug) {
       const shoulderDip = smoothedShoulderY - shoulderBaselineY;
       const noseDipFromPeak = nosePeakY - smoothedNoseY;
 
+      // Compute live wrist variance for debug
+      let liveWristVar = '--';
+      if (wristYSamples.length >= 3) {
+        const mean = wristYSamples.reduce((a, b) => a + b, 0) / wristYSamples.length;
+        liveWristVar = Math.sqrt(wristYSamples.reduce((sum, v) => sum + (v - mean) ** 2, 0) / wristYSamples.length).toFixed(4);
+      }
+
       if (onDebug) {
         onDebug({
           noseY: smoothedNoseY.toFixed(3),
@@ -139,16 +160,20 @@ export function startTracking(video, canvas, onCount, onDebug) {
           minElbow: phase !== 'READY' ? Math.round(minElbowDuringDescent) : '--',
           noseDip: noseDip.toFixed(3),
           shoulderDip: shoulderDip.toFixed(3),
+          wristVar: liveWristVar,
           phase,
           count,
           gated: 'active',
         });
       }
 
-      // Track minimum elbow angle during descent/ascent
-      if (elbowAngle !== null && phase !== 'READY') {
-        if (elbowAngle < minElbowDuringDescent) {
+      // Track during descent/ascent
+      if (phase !== 'READY') {
+        if (elbowAngle !== null && elbowAngle < minElbowDuringDescent) {
           minElbowDuringDescent = elbowAngle;
+        }
+        if (wristY !== null) {
+          wristYSamples.push(wristY);
         }
       }
 
@@ -160,7 +185,8 @@ export function startTracking(video, canvas, onCount, onDebug) {
           nosePeakY = smoothedNoseY;
           shoulderPeakY = smoothedShoulderY;
           minElbowDuringDescent = elbowAngle !== null ? elbowAngle : 180;
-          logEvent('DESCEND', { nY: smoothedNoseY.toFixed(3), sY: smoothedShoulderY.toFixed(3), elbow: elbowAngle });
+          wristYSamples = [];
+          logEvent('DESCEND', { nY: smoothedNoseY.toFixed(3), sY: smoothedShoulderY.toFixed(3), elbow: elbowAngle, wristY: wristY !== null ? wristY.toFixed(3) : null });
         }
       }
 
@@ -172,20 +198,31 @@ export function startTracking(video, canvas, onCount, onDebug) {
         if (noseDipFromPeak > MIN_DIP_AMPLITUDE * 0.3 && noseTotalDip > MIN_DIP_AMPLITUDE) {
           const shoulderTotalDip = shoulderPeakY - shoulderBaselineY;
 
-          // Three checks must pass:
+          // Four checks must pass:
           // 1. Shoulders also moved (not just head)
           // 2. Elbow angle dropped below threshold (arms actually bent)
-          // 3. Elbow data was available
+          // 3. Wrists stayed planted (low variance = hands on floor)
+          // 4. Wrist data was available
           const shoulderOk = shoulderTotalDip > MIN_DIP_AMPLITUDE * 0.5;
           const elbowOk = minElbowDuringDescent <= MAX_ELBOW_ANGLE_FOR_REP;
           const hasElbow = minElbowDuringDescent < 180;
 
-          if (shoulderOk && elbowOk) {
+          // Wrist variance: compute standard deviation of wrist y during descent
+          let wristVar = 0;
+          let wristOk = false;
+          if (wristYSamples.length >= 3) {
+            const mean = wristYSamples.reduce((a, b) => a + b, 0) / wristYSamples.length;
+            wristVar = Math.sqrt(wristYSamples.reduce((sum, v) => sum + (v - mean) ** 2, 0) / wristYSamples.length);
+            wristOk = wristVar <= MAX_WRIST_VARIANCE;
+          }
+          const hasWrist = wristYSamples.length >= 3;
+
+          if (shoulderOk && elbowOk && wristOk) {
             phase = 'ASCENDING';
-            logEvent('ASCEND', { noseDip: noseTotalDip.toFixed(3), shoulderDip: shoulderTotalDip.toFixed(3), minElbow: Math.round(minElbowDuringDescent) });
+            logEvent('ASCEND', { noseDip: noseTotalDip.toFixed(3), shoulderDip: shoulderTotalDip.toFixed(3), minElbow: Math.round(minElbowDuringDescent), wristVar: wristVar.toFixed(4) });
           } else {
-            const reason = !shoulderOk ? 'shoulder' : !hasElbow ? 'no-elbow-data' : 'elbow-too-straight';
-            logEvent('REJECT', { reason, noseDip: noseTotalDip.toFixed(3), shoulderDip: shoulderTotalDip.toFixed(3), minElbow: Math.round(minElbowDuringDescent) });
+            const reason = !shoulderOk ? 'shoulder' : !hasElbow ? 'no-elbow-data' : !elbowOk ? 'elbow-too-straight' : !hasWrist ? 'no-wrist-data' : 'wrist-moved';
+            logEvent('REJECT', { reason, noseDip: noseTotalDip.toFixed(3), shoulderDip: shoulderTotalDip.toFixed(3), minElbow: Math.round(minElbowDuringDescent), wristVar: wristVar.toFixed(4) });
             phase = 'READY';
             noseBaselineY = smoothedNoseY;
             nosePeakY = smoothedNoseY;
@@ -201,13 +238,16 @@ export function startTracking(video, canvas, onCount, onDebug) {
         if (noseReturn > noseTotalDip * 0.6) {
           count++;
           onCount(count);
-          logEvent('COUNT', { n: count, noseDip: noseTotalDip.toFixed(3), minElbow: Math.round(minElbowDuringDescent) });
+          const wristMean = wristYSamples.length > 0 ? wristYSamples.reduce((a, b) => a + b, 0) / wristYSamples.length : 0;
+          const wristVarFinal = wristYSamples.length >= 3 ? Math.sqrt(wristYSamples.reduce((sum, v) => sum + (v - wristMean) ** 2, 0) / wristYSamples.length) : 0;
+          logEvent('COUNT', { n: count, noseDip: noseTotalDip.toFixed(3), minElbow: Math.round(minElbowDuringDescent), wristVar: wristVarFinal.toFixed(4) });
           phase = 'READY';
           noseBaselineY = smoothedNoseY;
           nosePeakY = smoothedNoseY;
           shoulderBaselineY = smoothedShoulderY;
           shoulderPeakY = smoothedShoulderY;
           minElbowDuringDescent = 180;
+          wristYSamples = [];
         }
       }
     } else {
