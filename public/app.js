@@ -23,6 +23,8 @@ function showToast(msg, duration = 3000) {
   setTimeout(() => el.classList.add('hidden'), duration);
 }
 
+function initIcons() { if (window.lucide) lucide.createIcons(); }
+
 function showScreen(name, data) {
   currentScreen = name;
   const app = document.getElementById('app');
@@ -33,6 +35,7 @@ function showScreen(name, data) {
     case 'team': renderTeam(app); break;
     default: app.innerHTML = '<p>Loading...</p>';
   }
+  initIcons();
 }
 
 function renderAuth(app) {
@@ -147,7 +150,7 @@ function renderDashboard(app, data) {
         <div class="greeting-sub">Hey,</div>
         <div class="greeting-name">${data.username}</div>
       </div>
-      <button class="settings-btn" id="settings-btn">&#9881;</button>
+      <button class="settings-btn" id="settings-btn"><i data-lucide="settings" style="width:20px;height:20px"></i></button>
     </div>
     <div class="progress-card">
       <div class="progress-label">Today</div>
@@ -161,13 +164,13 @@ function renderDashboard(app, data) {
     </div>` : ''}
     <div class="action-buttons">
       <button class="action-btn primary" id="btn-camera">
-        <span class="icon">&#128247;</span><span class="label">Camera</span>
+        <span class="icon"><i data-lucide="camera" style="width:22px;height:22px"></i></span><span class="label">Camera</span>
       </button>
       <button class="action-btn" id="btn-manual">
-        <span class="icon">&#9998;</span><span class="label">Manual</span>
+        <span class="icon"><i data-lucide="plus" style="width:22px;height:22px"></i></span><span class="label">Manual</span>
       </button>
       <button class="action-btn" id="btn-team">
-        <span class="icon">&#128101;</span><span class="label">Team</span>
+        <span class="icon"><i data-lucide="users" style="width:22px;height:22px"></i></span><span class="label">Team</span>
       </button>
     </div>
   `;
@@ -194,7 +197,7 @@ function showManualEntry() {
       <button class="btn btn-surface" style="width:100%" id="step-cancel">Cancel</button>
     </div>
   `;
-  document.body.appendChild(overlay);
+  document.body.appendChild(overlay); initIcons();
 
   const valEl = overlay.querySelector('#step-val');
   overlay.querySelector('#step-down').addEventListener('click', () => { count = Math.max(1, count - 5); valEl.textContent = count; });
@@ -227,7 +230,7 @@ function showSettings() {
       <button class="btn btn-surface" style="width:100%" id="set-close">Close</button>
     </div>
   `;
-  document.body.appendChild(overlay);
+  document.body.appendChild(overlay); initIcons();
 
   overlay.querySelector('#set-save').addEventListener('click', async () => {
     const target = parseInt(overlay.querySelector('#set-target').value) || 0;
@@ -260,14 +263,14 @@ async function renderTeam(app) {
     <div class="team-screen">
       <div class="team-header">
         <h2>Team</h2>
-        <button class="back-btn" id="back-dash">&larr; Back</button>
+        <button class="back-btn" id="back-dash"><i data-lucide="arrow-left" style="width:16px;height:16px;display:inline;vertical-align:middle"></i> Back</button>
       </div>
       ${team.map(m => {
         let statusClass = 'not-started';
         let display = `${m.today_total} / ${m.daily_target}`;
         if (m.daily_target > 0 && m.today_total >= m.daily_target) {
           statusClass = 'complete';
-          display = `${m.today_total} &#10004;`;
+          display = `${m.today_total} <i data-lucide="check" style="width:16px;height:16px;display:inline"></i>`;
         } else if (m.today_total > 0) {
           statusClass = 'in-progress';
         }
@@ -356,7 +359,7 @@ function showTutorial(onStart) {
 async function renderCamera(app) {
   showTutorial(() => startCameraSession());
 
-  const DEV_VIEW = false;
+  const DEV_VIEW = mode === 'standard';
 
   async function startCameraSession() {
     let facingMode = cameraMode === 'standard' ? 'environment' : 'user';
@@ -393,7 +396,7 @@ async function renderCamera(app) {
         </div>
         <div class="camera-controls">
           <button class="btn btn-danger" id="cam-stop">Stop &amp; Save</button>
-          <button class="btn-flip" id="cam-flip" title="Flip camera">&#128260;</button>
+          <button class="btn-flip" id="cam-flip" title="Flip camera"><i data-lucide="refresh-cw" style="width:16px;height:16px"></i></button>
           <button class="btn-flip" id="cam-log" title="Copy debug log">LOG</button>
           <button class="btn-flip" id="cam-help" title="Help">?</button>
         </div>
@@ -404,10 +407,14 @@ async function renderCamera(app) {
           <video id="cam-video" playsinline autoplay muted style="border:3px solid #fc8181;border-radius:8px"></video>
           <canvas id="cam-canvas"></canvas>
           <div style="position:absolute;top:16px;left:16px;display:flex;gap:8px">
-            <button class="prod-btn" id="cam-stop" title="Stop">&#9632;</button>
-            <button class="prod-btn" id="cam-flip" title="Flip camera">&#128260;</button>
+            <button class="prod-btn" id="cam-stop" title="Stop"><i data-lucide="square" style="width:16px;height:16px"></i></button>
+            <button class="prod-btn" id="cam-flip" title="Flip camera"><i data-lucide="refresh-cw" style="width:16px;height:16px"></i></button>
           </div>
-          <div style="position:absolute;top:16px;right:16px">
+          <div style="position:absolute;top:16px;right:16px;display:flex;gap:8px;align-items:center">
+            <div style="background:rgba(0,0,0,0.5);backdrop-filter:blur(8px);border-radius:20px;padding:6px 12px;font-size:12px;font-weight:600;color:#fff;display:flex;align-items:center;gap:6px">
+              <i data-lucide="${mode === 'standard' ? 'move-horizontal' : 'user'}" style="width:14px;height:14px"></i>
+              ${mode === 'standard' ? 'Side view' : 'Face camera'}
+            </div>
             <button class="prod-btn" id="cam-help" title="Help">?</button>
           </div>
           <div id="cam-gate-msg" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:#fff;font-size:16px;font-weight:600;text-shadow:0 2px 8px rgba(0,0,0,0.8);pointer-events:none">
@@ -533,6 +540,7 @@ async function renderCamera(app) {
       showTutorial(() => startCameraSession());
     });
 
+    initIcons();
     try { await startCamera(); }
     catch { showToast('Camera access denied.'); await loadDashboard(); }
   }

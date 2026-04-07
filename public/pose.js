@@ -448,7 +448,7 @@ export function startTracking(video, canvas, onCount, onDebug, mode = 'noob') {
 
 export async function getCamera(facingMode = 'user') {
   return navigator.mediaDevices.getUserMedia({
-    video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
+    video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 }, aspectRatio: { ideal: 16/9 } },
     audio: false,
   });
 }
