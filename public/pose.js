@@ -6,8 +6,9 @@ let animationFrameId = null;
 const MIN_VISIBILITY = 0.5;
 const SMOOTHING_WINDOW = 9;
 const MIN_DIP_AMPLITUDE = 0.04;
-// Elbow must bend below this angle at some point during descent to confirm a real pushup
 const MAX_ELBOW_ANGLE_FOR_REP = 130;
+// If knees and hips are both visible and close together (y-distance < this), reject as kneeling
+const MAX_HIP_KNEE_PROXIMITY = 0.15;
 
 export async function initPoseDetection() {
   if (poseLandmarker) return poseLandmarker;
@@ -70,8 +71,10 @@ export function startTracking(video, canvas, onCount, onDebug) {
   let shoulderBaselineY = 0;
   let shoulderPeakY = 0;
   let minElbowDuringDescent = 180;
-  let wristYSamples = []; // track wrist positions during descent
-  const MAX_WRIST_VARIANCE = 0.015; // wrists must stay planted (low movement)
+  let wristYSamples = [];
+  const MAX_WRIST_VARIANCE = 0.015;
+  let kneelingFrames = 0; // count frames where kneeling detected during descent
+  let totalLowerBodyFrames = 0; // frames where hips/knees were visible
 
   const eventLog = [];
   function logEvent(type, data) {
@@ -175,6 +178,19 @@ export function startTracking(video, canvas, onCount, onDebug) {
         if (wristY !== null) {
           wristYSamples.push(wristY);
         }
+        // Kneeling detection: check hip-to-knee proximity
+        const lHip = landmarks[23], rHip = landmarks[24];
+        const lKnee = landmarks[25], rKnee = landmarks[26];
+        const hipVis = Math.max(lHip.visibility, rHip.visibility);
+        const kneeVis = Math.max(lKnee.visibility, rKnee.visibility);
+        if (hipVis > MIN_VISIBILITY && kneeVis > MIN_VISIBILITY) {
+          totalLowerBodyFrames++;
+          const hipY = (lHip.y + rHip.y) / 2;
+          const kneeY = (lKnee.y + rKnee.y) / 2;
+          if (Math.abs(hipY - kneeY) < MAX_HIP_KNEE_PROXIMITY) {
+            kneelingFrames++;
+          }
+        }
       }
 
       if (phase === 'READY') {
@@ -186,6 +202,8 @@ export function startTracking(video, canvas, onCount, onDebug) {
           shoulderPeakY = smoothedShoulderY;
           minElbowDuringDescent = elbowAngle !== null ? elbowAngle : 180;
           wristYSamples = [];
+          kneelingFrames = 0;
+          totalLowerBodyFrames = 0;
           logEvent('DESCEND', { nY: smoothedNoseY.toFixed(3), sY: smoothedShoulderY.toFixed(3), elbow: elbowAngle, wristY: wristY !== null ? wristY.toFixed(3) : null });
         }
       }
@@ -217,12 +235,16 @@ export function startTracking(video, canvas, onCount, onDebug) {
           }
           const hasWrist = wristYSamples.length >= 3;
 
-          if (shoulderOk && elbowOk && wristOk) {
+          // Kneeling check: if we saw lower body and most frames showed kneeling posture, reject
+          const kneelingRatio = totalLowerBodyFrames > 0 ? kneelingFrames / totalLowerBodyFrames : 0;
+          const kneelingOk = kneelingRatio < 0.5; // more than half of visible frames showing kneeling = reject
+
+          if (shoulderOk && elbowOk && wristOk && kneelingOk) {
             phase = 'ASCENDING';
-            logEvent('ASCEND', { noseDip: noseTotalDip.toFixed(3), shoulderDip: shoulderTotalDip.toFixed(3), minElbow: Math.round(minElbowDuringDescent), wristVar: wristVar.toFixed(4) });
+            logEvent('ASCEND', { noseDip: noseTotalDip.toFixed(3), shoulderDip: shoulderTotalDip.toFixed(3), minElbow: Math.round(minElbowDuringDescent), wristVar: wristVar.toFixed(4), kneel: kneelingRatio.toFixed(2) });
           } else {
-            const reason = !shoulderOk ? 'shoulder' : !hasElbow ? 'no-elbow-data' : !elbowOk ? 'elbow-too-straight' : !hasWrist ? 'no-wrist-data' : 'wrist-moved';
-            logEvent('REJECT', { reason, noseDip: noseTotalDip.toFixed(3), shoulderDip: shoulderTotalDip.toFixed(3), minElbow: Math.round(minElbowDuringDescent), wristVar: wristVar.toFixed(4) });
+            const reason = !shoulderOk ? 'shoulder' : !hasElbow ? 'no-elbow-data' : !elbowOk ? 'elbow-too-straight' : !hasWrist ? 'no-wrist-data' : !wristOk ? 'wrist-moved' : 'kneeling';
+            logEvent('REJECT', { reason, noseDip: noseTotalDip.toFixed(3), shoulderDip: shoulderTotalDip.toFixed(3), minElbow: Math.round(minElbowDuringDescent), wristVar: wristVar.toFixed(4), kneel: kneelingRatio.toFixed(2) });
             phase = 'READY';
             noseBaselineY = smoothedNoseY;
             nosePeakY = smoothedNoseY;
@@ -248,6 +270,8 @@ export function startTracking(video, canvas, onCount, onDebug) {
           shoulderPeakY = smoothedShoulderY;
           minElbowDuringDescent = 180;
           wristYSamples = [];
+          kneelingFrames = 0;
+          totalLowerBodyFrames = 0;
         }
       }
     } else {
