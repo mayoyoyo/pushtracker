@@ -356,13 +356,17 @@ function showTutorial(onStart) {
 async function renderCamera(app) {
   showTutorial(() => startCameraSession());
 
+  const DEV_VIEW = false;
+
   async function startCameraSession() {
     let facingMode = cameraMode === 'standard' ? 'environment' : 'user';
     let stream = null;
     let tracker = null;
     const mode = cameraMode;
+    let sessionStartTime = null;
+    let timerInterval = null;
 
-    app.innerHTML = `
+    app.innerHTML = DEV_VIEW ? `
       <div class="camera-screen">
         <div class="camera-feed">
           <video id="cam-video" playsinline autoplay muted style="border:3px solid #fc8181;border-radius:8px"></video>
@@ -394,13 +398,44 @@ async function renderCamera(app) {
           <button class="btn-flip" id="cam-help" title="Help">?</button>
         </div>
       </div>
+    ` : `
+      <div class="camera-screen">
+        <div class="camera-feed">
+          <video id="cam-video" playsinline autoplay muted style="border:3px solid #fc8181;border-radius:8px"></video>
+          <canvas id="cam-canvas"></canvas>
+          <div style="position:absolute;top:16px;left:16px;display:flex;gap:8px">
+            <button class="prod-btn" id="cam-stop" title="Stop">&#9632;</button>
+            <button class="prod-btn" id="cam-flip" title="Flip camera">&#128260;</button>
+          </div>
+          <div style="position:absolute;top:16px;right:16px">
+            <button class="prod-btn" id="cam-help" title="Help">?</button>
+          </div>
+          <div id="cam-gate-msg" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:#fff;font-size:16px;font-weight:600;text-shadow:0 2px 8px rgba(0,0,0,0.8);pointer-events:none">
+            Position yourself in frame...
+          </div>
+          <div style="position:absolute;bottom:0;left:0;right:0;padding:20px;text-align:center;background:linear-gradient(transparent, rgba(0,0,0,0.7))">
+            <div id="cam-count" style="font-size:72px;font-weight:900;letter-spacing:-3px;line-height:1;color:#fff;text-shadow:0 2px 12px rgba(0,0,0,0.5)">0</div>
+            <div style="font-size:14px;color:rgba(255,255,255,0.7);margin-top:2px">Reps</div>
+            <div id="cam-timer" style="font-size:20px;font-weight:600;color:rgba(255,255,255,0.9);margin-top:4px;font-variant-numeric:tabular-nums">00:00</div>
+          </div>
+        </div>
+      </div>
     `;
 
     const video = document.getElementById('cam-video');
     const canvas = document.getElementById('cam-canvas');
     const countEl = document.getElementById('cam-count');
-    const trackingBadge = document.getElementById('cam-tracking');
+    const trackingBadge = DEV_VIEW ? document.getElementById('cam-tracking') : null;
+    const gateMsg = !DEV_VIEW ? document.getElementById('cam-gate-msg') : null;
+    const timerEl = !DEV_VIEW ? document.getElementById('cam-timer') : null;
     let trackingInterval;
+
+    function updateTimer() {
+      if (!sessionStartTime || !timerEl) return;
+      const s = Math.floor((Date.now() - sessionStartTime) / 1000);
+      const m = Math.floor(s / 60);
+      timerEl.textContent = String(m).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+    }
 
     async function startCamera() {
       const pose = await loadPose();
@@ -412,34 +447,57 @@ async function renderCamera(app) {
       tracker = pose.startTracking(video, canvas, (count) => {
         countEl.textContent = count;
       }, (d) => {
-        if (mode === 'standard') {
-          document.getElementById('d-f1').textContent = 'sDip:' + (d.sDip ?? '--');
-          document.getElementById('d-f2').textContent = 'aVar:' + (d.ankleVar ?? '--');
-          document.getElementById('d-f3').textContent = 'knee:' + (d.kneeAng ?? '--');
-          document.getElementById('d-f4').textContent = d.gateProgress ? 'gate:' + d.gateProgress : (d.missing && d.missing !== 'none' ? 'need:' + d.missing : '');
+        if (DEV_VIEW) {
+          if (mode === 'standard') {
+            document.getElementById('d-f1').textContent = 'sDip:' + (d.sDip ?? '--');
+            document.getElementById('d-f2').textContent = 'aVar:' + (d.ankleVar ?? '--');
+            document.getElementById('d-f3').textContent = 'knee:' + (d.kneeAng ?? '--');
+            document.getElementById('d-f4').textContent = d.gateProgress ? 'gate:' + d.gateProgress : (d.missing && d.missing !== 'none' ? 'need:' + d.missing : '');
+          } else {
+            document.getElementById('d-f1').textContent = 'nDip:' + (d.noseDip ?? '--');
+            document.getElementById('d-f2').textContent = 'sDip:' + (d.shoulderDip ?? '--');
+            document.getElementById('d-f3').textContent = 'elb:' + (d.elbow ?? '--');
+            document.getElementById('d-f4').textContent = d.gateProgress ? 'gate:' + d.gateProgress : 'wVar:' + (d.wVar ?? '--');
+          }
+          const stateKey = d.phase || d.state || '--';
+          document.getElementById('d-state').textContent = stateKey;
+          document.getElementById('d-state').style.color = stateKey === 'DOWN' || stateKey === 'DESCENDING' ? '#fc8181' : stateKey === 'ASCENDING' ? '#ecc94b' : '#48bb78';
+          document.getElementById('d-gate').textContent = d.gated ?? '--';
+          document.getElementById('d-gate').style.color = d.gated === 'active' ? '#48bb78' : '#fc8181';
+          document.getElementById('d-count').textContent = d.count ?? 0;
         } else {
-          document.getElementById('d-f1').textContent = 'nDip:' + (d.noseDip ?? '--');
-          document.getElementById('d-f2').textContent = 'sDip:' + (d.shoulderDip ?? '--');
-          document.getElementById('d-f3').textContent = 'elb:' + (d.elbow ?? '--');
-          document.getElementById('d-f4').textContent = d.gateProgress ? 'gate:' + d.gateProgress : 'wVar:' + (d.wVar ?? '--');
+          // Prod view: gate message + timer
+          if (d.gated === 'active') {
+            if (gateMsg.style.display !== 'none') gateMsg.style.display = 'none';
+            if (!sessionStartTime) sessionStartTime = Date.now();
+          } else {
+            gateMsg.style.display = '';
+            const missing = d.missing;
+            if (d.gateProgress) {
+              gateMsg.textContent = 'Hold still...';
+            } else if (missing && missing !== 'none') {
+              gateMsg.textContent = 'Position yourself in frame';
+            } else {
+              gateMsg.textContent = 'Looking for you...';
+            }
+          }
         }
-        const stateKey = d.phase || d.state || '--';
-        document.getElementById('d-state').textContent = stateKey;
-        document.getElementById('d-state').style.color = stateKey === 'DOWN' || stateKey === 'DESCENDING' ? '#fc8181' : stateKey === 'ASCENDING' ? '#ecc94b' : '#48bb78';
-        document.getElementById('d-gate').textContent = d.gated ?? '--';
-        document.getElementById('d-gate').style.color = d.gated === 'active' ? '#48bb78' : '#fc8181';
-        document.getElementById('d-count').textContent = d.count ?? 0;
-        document.getElementById('cam-video').style.borderColor = d.gated === 'active' ? '#48bb78' : '#fc8181';
+        video.style.borderColor = d.gated === 'active' ? '#48bb78' : '#fc8181';
       }, mode);
 
-      trackingInterval = setInterval(() => {
-        if (tracker && tracker.isTracking()) trackingBadge.classList.remove('hidden');
-        else trackingBadge.classList.add('hidden');
-      }, 500);
+      if (DEV_VIEW) {
+        trackingInterval = setInterval(() => {
+          if (tracker && tracker.isTracking()) trackingBadge.classList.remove('hidden');
+          else trackingBadge.classList.add('hidden');
+        }, 500);
+      } else {
+        trackingInterval = setInterval(updateTimer, 1000);
+      }
     }
 
     function stopCamera() {
       if (trackingInterval) clearInterval(trackingInterval);
+      if (timerInterval) clearInterval(timerInterval);
       if (tracker) tracker.stop();
       if (stream) stream.getTracks().forEach(t => t.stop());
     }
@@ -460,13 +518,15 @@ async function renderCamera(app) {
       await startCamera();
     });
 
-    document.getElementById('cam-log').addEventListener('click', () => {
-      if (tracker) {
-        const log = tracker.getLog();
-        const text = log.map(e => JSON.stringify(e)).join('\n');
-        navigator.clipboard.writeText(text).then(() => showToast('Debug log copied (' + log.length + ' events)')).catch(() => prompt('Copy:', text));
-      }
-    });
+    if (DEV_VIEW) {
+      document.getElementById('cam-log').addEventListener('click', () => {
+        if (tracker) {
+          const log = tracker.getLog();
+          const text = log.map(e => JSON.stringify(e)).join('\n');
+          navigator.clipboard.writeText(text).then(() => showToast('Debug log copied (' + log.length + ' events)')).catch(() => prompt('Copy:', text));
+        }
+      });
+    }
 
     document.getElementById('cam-help').addEventListener('click', () => {
       stopCamera();

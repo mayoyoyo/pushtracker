@@ -139,6 +139,11 @@ body {
   flex: 0 0 48px; font-size: 18px; background: var(--surface-2);
   color: var(--text); border: none; border-radius: var(--radius); cursor: pointer;
 }
+.prod-btn {
+  width: 40px; height: 40px; border-radius: 50%; border: none;
+  background: rgba(0,0,0,0.5); color: #fff; font-size: 16px;
+  cursor: pointer; backdrop-filter: blur(8px);
+}
 
 .manual-entry {
   position: fixed; inset: 0; background: rgba(0,0,0,0.7);
