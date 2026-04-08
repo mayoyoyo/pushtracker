@@ -1,5 +1,7 @@
-import { getUsersWithExpiredBoundary, getTodayTotal, getTodayLogs, updateDebt, updateNextDayBoundary, updateStreak, saveDayResult } from "./db";
+import { getUsersWithExpiredBoundary, getTodayTotal, getTodayLogs, updateDebt, updateNextDayBoundary, updateStreak, saveDayResult, getSlackConfig } from "./db";
 import { advanceBoundary, getPreviousDayBoundary } from "./timezone";
+import { postDayResult } from "./slack";
+import { DateTime } from "luxon";
 
 const CRON_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
 
@@ -38,9 +40,16 @@ export function processExpiredBoundaries(nowUtc: string): void {
       updateStreak(user.id, newLast5, newStreak);
 
       // Save to day_results for calendar (date = the day that just ended)
-      const { DateTime } = require("luxon");
       const dayDate = DateTime.fromISO(prevBoundary, { zone: 'utc' }).setZone(user.timezone).toISODate();
       saveDayResult(user.id, dayDate, met, dayIcon === 'S' ? 'standard' : dayIcon === 'F' ? 'noob' : 'manual', todayTotal);
+
+      // Post to Slack if team has it configured
+      const slackConfig = getSlackConfig(user.invite_code);
+      if (slackConfig) {
+        const formattedDate = DateTime.fromISO(dayDate).toFormat("MMMM d, yyyy");
+        postDayResult(slackConfig.slack_bot_token, slackConfig.slack_channel, user.username, formattedDate, todayTotal, user.daily_target, met, newStreak)
+          .catch(err => console.error(`Slack post failed for ${user.username}:`, err));
+      }
 
       if (shortfall > 0 && (userWasActive || dayFullyElapsed)) {
         updateDebt(user.id, shortfall);
