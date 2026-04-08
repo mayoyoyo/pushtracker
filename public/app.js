@@ -390,7 +390,7 @@ function renderDashboard(app, data) {
             <div class="team-member">
               <div>
                 <div class="member-name">${m.username} <span style="font-size:14px;letter-spacing:1px">${streakIcons(m.last5days)}</span></div>
-                <div class="member-target">${streakText(m.streak)}${mRemainingDebt > 0 ? `<span style="font-size:11px;color:var(--danger);margin-left:${m.streak.count > 0 ? '4' : '0'}px">debt: ${mRemainingDebt}</span>` : ''}</div>
+                <div class="member-target">${!m.last5days || !m.last5days.length ? '<span style="font-size:11px;color:var(--text-dim)">not started</span>' : `${streakText(m.streak)}${mRemainingDebt > 0 ? `<span style="font-size:11px;color:var(--danger);margin-left:${m.streak.count > 0 ? '4' : '0'}px">debt: ${mRemainingDebt}</span>` : ''}`}</div>
               </div>
               <div class="member-progress ${statusClass}">${display}</div>
             </div>`;
