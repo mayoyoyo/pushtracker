@@ -47,7 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function streakIcons(last5days) {
   if (!last5days || !last5days.length) return '';
-  return [...last5days].reverse().map(d => {
+  return last5days.map(d => {
     if (!d.met) return '🧊';
     return d.mode === 'standard' ? '<img src="/opm-fist.png" style="width:22px;height:22px;vertical-align:middle">' : '🔥';
   }).join('');
@@ -192,14 +192,22 @@ async function renderCalendar(container, userData) {
     let gridHtml = '';
     // Empty cells for offset
     for (let i = 0; i < firstDay; i++) gridHtml += '<div class="cal-cell"></div>';
+    const created = userData.created_at ? new Date(userData.created_at.replace(' ', 'T') + 'Z') : now;
     for (let d = 1; d <= daysInMonth; d++) {
       const isToday = isCurrentMonth && d === today;
+      const cellDate = new Date(year, month - 1, d);
+      const isPast = cellDate < new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const afterCreation = cellDate >= new Date(created.getFullYear(), created.getMonth(), created.getDate());
       const entry = dayMap[d];
       let icon = '';
       if (entry) {
         if (entry.met) {
           icon = entry.mode === 'standard' ? '<img src="/opm-fist.png" style="width:14px;height:14px">' : '🔥';
+        } else {
+          icon = '🧊';
         }
+      } else if (isPast && afterCreation) {
+        icon = '🧊';
       }
       const todayStyle = isToday ? 'border:2px solid #ef4444;border-radius:50%;' : '';
       gridHtml += `<div class="cal-cell" style="${todayStyle}"><div style="font-size:11px;color:var(--text-muted)">${d}</div><div style="font-size:12px;line-height:1">${icon}</div></div>`;
