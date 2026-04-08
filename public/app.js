@@ -478,7 +478,7 @@ let cameraMode = 'noob'; // 'noob' or 'standard'
 
 function getModeContent(mode) {
   if (mode === 'standard') return `
-    <div style="text-align:center;margin-bottom:12px">
+    <div style="text-align:center;margin-bottom:20px">
       <img src="/opm-fist.png" style="width:48px;height:48px">
       <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Streak icon</div>
     </div>
@@ -486,16 +486,16 @@ function getModeContent(mode) {
       <img src="/setup-opm.png" style="width:110px;flex-shrink:0;border-radius:10px;object-fit:contain">
       <div style="flex:1">
         <div style="font-weight:600;margin-bottom:10px;font-size:14px">Setup in 3 steps:</div>
-        <div style="display:flex;flex-direction:column;gap:10px;font-size:13px">
-          <div style="display:flex;gap:8px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:16px">1</span><span style="color:var(--text-dim)"><strong style="color:var(--text)">Phone to your side</strong> — prop 1-2ft off ground</span></div>
-          <div style="display:flex;gap:8px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:16px">2</span><span style="color:var(--text-dim)"><strong style="color:var(--text)">Full body in frame</strong> — head to feet</span></div>
-          <div style="display:flex;gap:8px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:16px">3</span><span style="color:var(--text-dim)"><strong style="color:var(--text)">Wait for the chime</strong> — green = ready</span></div>
+        <div style="display:flex;flex-direction:column;gap:12px;font-size:13px">
+          <div style="display:flex;gap:8px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:16px">1</span><div><strong style="color:var(--text)">Phone to your side</strong><br><span style="color:var(--text-dim)">It needs to see your full profile</span></div></div>
+          <div style="display:flex;gap:8px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:16px">2</span><div><strong style="color:var(--text)">Full body in frame</strong><br><span style="color:var(--text-dim)">Head to feet, including ankles</span></div></div>
+          <div style="display:flex;gap:8px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:16px">3</span><div><strong style="color:var(--text)">Wait for the chime</strong><br><span style="color:var(--text-dim)">Green border means ready</span></div></div>
         </div>
       </div>
     </div>
     <p style="font-size:11px;color:var(--text-muted);line-height:1.5;padding:0 4px">One Punch Mode uses full-body tracking with stricter form requirements. Some reps may not count if ankles leave the frame or knee angle is too bent. Keep your full body visible for best results.</p>`;
   return `
-    <div style="text-align:center;margin-bottom:12px">
+    <div style="text-align:center;margin-bottom:20px">
       <div style="font-size:36px">🔥</div>
       <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Streak icon</div>
     </div>
@@ -503,10 +503,10 @@ function getModeContent(mode) {
       <img src="/setup-noob.png" style="width:110px;flex-shrink:0;border-radius:10px;object-fit:contain">
       <div style="flex:1">
         <div style="font-weight:600;margin-bottom:10px;font-size:14px">Setup in 3 steps:</div>
-        <div style="display:flex;flex-direction:column;gap:10px;font-size:13px">
-          <div style="display:flex;gap:8px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:16px">1</span><span style="color:var(--text-dim)"><strong style="color:var(--text)">Face the camera</strong> — phone on floor in front</span></div>
-          <div style="display:flex;gap:8px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:16px">2</span><span style="color:var(--text-dim)"><strong style="color:var(--text)">Face + shoulders visible</strong> — that's all it needs</span></div>
-          <div style="display:flex;gap:8px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:16px">3</span><span style="color:var(--text-dim)"><strong style="color:var(--text)">Wait for the chime</strong> — green = ready</span></div>
+        <div style="display:flex;flex-direction:column;gap:12px;font-size:13px">
+          <div style="display:flex;gap:8px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:16px">1</span><div><strong style="color:var(--text)">Face the camera</strong><br><span style="color:var(--text-dim)">Place phone on the floor in front of you</span></div></div>
+          <div style="display:flex;gap:8px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:16px">2</span><div><strong style="color:var(--text)">Face + shoulders visible</strong><br><span style="color:var(--text-dim)">That's all it needs to track</span></div></div>
+          <div style="display:flex;gap:8px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:16px">3</span><div><strong style="color:var(--text)">Wait for the chime</strong><br><span style="color:var(--text-dim)">Green border means ready</span></div></div>
         </div>
       </div>
     </div>
@@ -530,7 +530,7 @@ function showTutorial(onStart) {
 
         ${getModeContent(isStd ? 'standard' : 'noob')}
 
-        <button class="btn btn-primary" style="width:100%;margin-top:16px" id="tut-start">Start Camera</button>
+        <button class="btn btn-primary" style="width:100%;margin-top:24px" id="tut-start">Start Recording</button>
       </div>
     </div>
   `;
