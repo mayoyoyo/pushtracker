@@ -481,8 +481,8 @@ function showTutorial(onStart) {
   const isStd = cameraMode === 'standard';
   app.innerHTML = `
     <div class="camera-screen" style="background:var(--bg);overflow-y:auto">
-      <div style="padding:24px 20px;max-width:400px;margin:0 auto;position:relative">
-        <button id="tut-back" style="position:absolute;top:0;left:0;background:none;border:none;color:var(--text-dim);cursor:pointer;padding:4px"><i data-lucide="arrow-left" style="width:20px;height:20px"></i></button>
+      <button id="tut-back" style="position:fixed;top:16px;left:16px;background:none;border:none;color:var(--text-dim);cursor:pointer;padding:8px;z-index:101"><i data-lucide="arrow-left" style="width:20px;height:20px"></i></button>
+      <div style="padding:24px 20px;max-width:400px;margin:0 auto">
         <h2 style="text-align:center;margin-bottom:8px">${isStd ? 'One Punch Mode' : 'Noob Mode'}</h2>
         <div style="display:flex;justify-content:center;margin-bottom:16px">
           <div style="display:inline-flex;background:var(--surface-2);border-radius:8px;overflow:hidden">
