@@ -506,6 +506,7 @@ function showTutorial(onStart) {
             <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:18px">3</span><span style="color:var(--text-dim)"><strong style="color:var(--text)">Wait for the chime</strong> — green border = ready to go</span></div>
           </div>
         </div>
+        <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin-bottom:20px;padding:0 4px">One Punch Mode uses full-body tracking with stricter form requirements. Some reps may not count if ankles leave the frame or knee angle is too bent. Keep your full body visible for best results.</p>
         ` : `
         <div style="text-align:center;margin-bottom:16px">
           <div style="font-size:48px">🔥</div>
@@ -522,6 +523,7 @@ function showTutorial(onStart) {
             <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:18px">3</span><span style="color:var(--text-dim)"><strong style="color:var(--text)">Wait for the chime</strong> — green border = ready to go</span></div>
           </div>
         </div>
+        <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin-bottom:20px;padding:0 4px">Noob Mode only tracks your upper body — it can't tell if you're on your knees or doing full push-ups. Great for getting started, but it won't catch shortcuts.</p>
         `}
 
         <button class="btn btn-primary" style="width:100%;margin-bottom:10px" id="tut-start">Start Camera</button>
