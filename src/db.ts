@@ -148,6 +148,13 @@ export function getDayHistory(userId: number, timezone: string, nextBoundaryUtc:
   let endBoundary = nextBoundaryUtc;
   for (let i = 0; i < days; i++) {
     const startBoundary = getPreviousDayBoundary(timezone, endBoundary);
+
+    // Skip days before user existed
+    if (user.created_at > endBoundary) {
+      endBoundary = startBoundary;
+      continue;
+    }
+
     const total = getTodayTotal(userId, startBoundary, endBoundary);
     const met = user.daily_target > 0 && total >= user.daily_target;
 

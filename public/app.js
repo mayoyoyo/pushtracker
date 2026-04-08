@@ -171,9 +171,15 @@ function renderDashboard(app, data) {
 
   function tabHeader() {
     return `
-      <div style="text-align:center;margin-bottom:12px">
-        <div style="font-size:18px;font-weight:700">${data.group_name || 'Pushup Challenge'}</div>
-        ${data.group_name ? '<div style="font-size:12px;color:var(--text-dim)">Pushup Challenge</div>' : ''}
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+        <div style="flex:1"></div>
+        <div style="text-align:center">
+          <div style="font-size:18px;font-weight:700">${data.group_name || 'Pushup Challenge'}</div>
+          ${data.group_name ? '<div style="font-size:12px;color:var(--text-dim)">Pushup Challenge</div>' : ''}
+        </div>
+        <div style="flex:1;display:flex;justify-content:flex-end">
+          <button class="settings-btn" id="settings-btn"><i data-lucide="settings" style="width:18px;height:18px"></i></button>
+        </div>
       </div>
       <div style="display:flex;justify-content:center;margin-bottom:16px">
         <div style="display:inline-flex;background:var(--surface-2);border-radius:8px;overflow:hidden">
@@ -186,6 +192,7 @@ function renderDashboard(app, data) {
   function bindTabs() {
     app.querySelector('#tab-me').addEventListener('click', () => { activeTab = 'me'; renderTab(); });
     app.querySelector('#tab-team').addEventListener('click', () => { activeTab = 'team'; renderTab(); });
+    app.querySelector('#settings-btn').addEventListener('click', () => showSettings());
   }
 
   function renderMeTab() {
@@ -221,15 +228,11 @@ function renderDashboard(app, data) {
           <span class="icon"><i data-lucide="plus" style="width:22px;height:22px"></i></span><span class="label">Manual</span>
         </button>
       </div>
-      <div style="display:flex;justify-content:flex-end;margin-top:24px">
-        <button class="settings-btn" id="settings-btn"><i data-lucide="settings" style="width:20px;height:20px"></i></button>
-      </div>
     `;
 
     bindTabs();
     app.querySelector('#btn-camera').addEventListener('click', () => showScreen('camera'));
     app.querySelector('#btn-manual').addEventListener('click', () => showManualEntry());
-    app.querySelector('#settings-btn').addEventListener('click', () => showSettings());
     initIcons();
   }
 
