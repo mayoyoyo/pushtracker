@@ -1,31 +1,44 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 180" fill="none">
-  <!-- Floor -->
-  <line x1="20" y1="150" x2="280" y2="150" stroke="#3f3f46" stroke-width="2"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 220" fill="none">
+  <!-- Floor surface (slight perspective) -->
+  <rect x="20" y="140" width="260" height="60" rx="4" fill="#18181b" stroke="#27272a" stroke-width="1"/>
 
-  <!-- Person doing pushup (front view, simplified) -->
-  <!-- Head -->
-  <circle cx="150" cy="60" r="16" stroke="#a1a1aa" stroke-width="2"/>
-  <!-- Eyes -->
-  <circle cx="144" cy="58" r="2" fill="#a1a1aa"/>
-  <circle cx="156" cy="58" r="2" fill="#a1a1aa"/>
-  <!-- Body -->
-  <line x1="150" y1="76" x2="150" y2="110" stroke="#a1a1aa" stroke-width="2"/>
-  <!-- Arms (extended down to floor in pushup) -->
-  <line x1="150" y1="85" x2="115" y2="148" stroke="#a1a1aa" stroke-width="2"/>
-  <line x1="150" y1="85" x2="185" y2="148" stroke="#a1a1aa" stroke-width="2"/>
-  <!-- Hands on floor -->
-  <circle cx="115" cy="148" r="3" fill="#a1a1aa"/>
-  <circle cx="185" cy="148" r="3" fill="#a1a1aa"/>
+  <!-- Phone lying flat on floor, WELL IN FRONT of person -->
+  <rect x="50" y="155" width="40" height="24" rx="4" fill="#27272a" stroke="#22c55e" stroke-width="2"/>
+  <!-- Screen glow -->
+  <rect x="53" y="158" width="34" height="18" rx="2" fill="#09090b"/>
+  <!-- Camera lens -->
+  <circle cx="70" cy="162" r="3" fill="#22c55e"/>
+  <!-- Phone label -->
+  <text x="70" y="185" text-anchor="middle" fill="#22c55e" font-size="9" font-family="system-ui" font-weight="600">PHONE</text>
 
-  <!-- Phone on floor below person -->
-  <rect x="135" y="140" width="30" height="18" rx="3" stroke="#22c55e" stroke-width="2" fill="#18181b"/>
-  <!-- Camera dot -->
-  <circle cx="150" cy="144" r="2" fill="#22c55e"/>
+  <!-- Person in pushup position, BEHIND the phone (to the right) -->
+  <!-- Head (looking down at phone) -->
+  <circle cx="160" cy="88" r="18" fill="#27272a" stroke="#a1a1aa" stroke-width="2"/>
+  <!-- Face features looking left toward phone -->
+  <circle cx="152" cy="86" r="2" fill="#a1a1aa"/>
+  <circle cx="152" cy="92" r="2" fill="#a1a1aa"/>
 
-  <!-- Arrow from phone to person's face -->
-  <line x1="150" y1="138" x2="150" y2="82" stroke="#22c55e" stroke-width="1.5" stroke-dasharray="4 3"/>
-  <polygon points="146,86 150,78 154,86" fill="#22c55e"/>
+  <!-- Torso going back-right -->
+  <line x1="178" y1="92" x2="255" y2="115" stroke="#a1a1aa" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- Left arm (near arm, bent in pushup) -->
+  <line x1="175" y1="95" x2="160" y2="125" stroke="#a1a1aa" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="160" y1="125" x2="155" y2="150" stroke="#a1a1aa" stroke-width="2.5" stroke-linecap="round"/>
+  <circle cx="155" cy="150" r="4" fill="#3f3f46" stroke="#a1a1aa" stroke-width="1.5"/>
+
+  <!-- Right arm -->
+  <line x1="195" y1="100" x2="195" y2="130" stroke="#a1a1aa" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="195" y1="130" x2="195" y2="150" stroke="#a1a1aa" stroke-width="2.5" stroke-linecap="round"/>
+  <circle cx="195" cy="150" r="4" fill="#3f3f46" stroke="#a1a1aa" stroke-width="1.5"/>
+
+  <!-- Legs -->
+  <line x1="255" y1="115" x2="270" y2="150" stroke="#a1a1aa" stroke-width="2.5" stroke-linecap="round"/>
+  <circle cx="270" cy="150" r="4" fill="#3f3f46" stroke="#a1a1aa" stroke-width="1.5"/>
+
+  <!-- Arrow: phone camera → person's face -->
+  <path d="M90 165 Q120 130 148 95" stroke="#22c55e" stroke-width="2" stroke-dasharray="5 4" fill="none"/>
+  <polygon points="145,99 150,90 153,100" fill="#22c55e"/>
 
   <!-- Label -->
-  <text x="150" y="175" text-anchor="middle" fill="#a1a1aa" font-size="11" font-family="system-ui">Phone in front, facing you</text>
+  <text x="150" y="212" text-anchor="middle" fill="#a1a1aa" font-size="12" font-family="system-ui">Phone on floor, facing you</text>
 </svg>

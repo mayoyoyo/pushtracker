@@ -485,14 +485,15 @@ function showTutorial(onStart) {
         <h2 style="text-align:center;margin-bottom:8px">${isStd ? 'One Punch Mode' : 'Noob Mode'}</h2>
         <div style="display:flex;justify-content:center;margin-bottom:16px">
           <div style="display:inline-flex;background:var(--surface-2);border-radius:8px;overflow:hidden">
-            <button id="mode-noob" style="padding:8px 16px;border:none;font-size:13px;font-weight:500;cursor:pointer;background:${!isStd ? 'var(--primary)' : 'transparent'};color:${!isStd ? 'var(--primary-fg)' : 'var(--text)'}">🔥 Noob</button>
-            <button id="mode-std" style="padding:8px 16px;border:none;font-size:13px;font-weight:500;cursor:pointer;background:${isStd ? 'var(--danger)' : 'transparent'};color:${isStd ? '#fff' : 'var(--text)'}"><img src="/opm-fist.png" style="width:16px;height:16px;vertical-align:middle"> One Punch</button>
+            <button id="mode-noob" style="padding:8px 16px;border:none;font-size:13px;font-weight:500;cursor:pointer;background:${!isStd ? 'var(--primary)' : 'transparent'};color:${!isStd ? 'var(--primary-fg)' : 'var(--text)'}">Noob</button>
+            <button id="mode-std" style="padding:8px 16px;border:none;font-size:13px;font-weight:500;cursor:pointer;background:${isStd ? 'var(--danger)' : 'transparent'};color:${isStd ? '#fff' : 'var(--text)'}">One Punch</button>
           </div>
         </div>
 
         ${isStd ? `
         <div style="text-align:center;margin-bottom:16px">
           <img src="/opm-fist.png" style="width:64px;height:64px">
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Streak icon</div>
         </div>
         <div style="text-align:center;margin-bottom:16px">
           <img src="/setup-opm.svg" style="width:100%;max-width:280px;border-radius:10px">
@@ -506,7 +507,10 @@ function showTutorial(onStart) {
           </div>
         </div>
         ` : `
-        <div style="text-align:center;margin-bottom:16px;font-size:48px">🔥</div>
+        <div style="text-align:center;margin-bottom:16px">
+          <div style="font-size:48px">🔥</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Streak icon</div>
+        </div>
         <div style="text-align:center;margin-bottom:16px">
           <img src="/setup-noob.svg" style="width:100%;max-width:280px;border-radius:10px">
         </div>
