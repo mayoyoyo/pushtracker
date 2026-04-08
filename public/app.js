@@ -482,10 +482,10 @@ function getModeContent(mode) {
       <img src="/opm-fist.png" style="width:48px;height:48px">
       <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Streak icon</div>
     </div>
+    <div style="font-weight:600;margin-bottom:10px;font-size:14px">Setup in 3 steps:</div>
     <div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:16px">
       <img src="/setup-opm.png" style="width:110px;flex-shrink:0;border-radius:10px;object-fit:contain">
       <div style="flex:1">
-        <div style="font-weight:600;margin-bottom:10px;font-size:14px">Setup in 3 steps:</div>
         <div style="display:flex;flex-direction:column;gap:12px;font-size:13px">
           <div style="display:flex;gap:8px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:16px">1</span><div><strong style="color:var(--text)">Phone to your side</strong><br><span style="color:var(--text-dim)">It needs to see your full profile</span></div></div>
           <div style="display:flex;gap:8px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:16px">2</span><div><strong style="color:var(--text)">Full body in frame</strong><br><span style="color:var(--text-dim)">Head to feet, including ankles</span></div></div>
@@ -499,10 +499,10 @@ function getModeContent(mode) {
       <div style="font-size:36px">🔥</div>
       <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Streak icon</div>
     </div>
+    <div style="font-weight:600;margin-bottom:10px;font-size:14px">Setup in 3 steps:</div>
     <div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:16px">
       <img src="/setup-noob.png" style="width:110px;flex-shrink:0;border-radius:10px;object-fit:contain">
       <div style="flex:1">
-        <div style="font-weight:600;margin-bottom:10px;font-size:14px">Setup in 3 steps:</div>
         <div style="display:flex;flex-direction:column;gap:12px;font-size:13px">
           <div style="display:flex;gap:8px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:16px">1</span><div><strong style="color:var(--text)">Face the camera</strong><br><span style="color:var(--text-dim)">Place phone on the floor in front of you</span></div></div>
           <div style="display:flex;gap:8px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:16px">2</span><div><strong style="color:var(--text)">Face + shoulders visible</strong><br><span style="color:var(--text-dim)">That's all it needs to track</span></div></div>
