@@ -15,7 +15,7 @@ export async function signup(username: string, passcode: string, timezone: strin
   const hashedPasscode = await Bun.password.hash(passcode);
   const nowUtc = new Date().toISOString();
   const nextBoundary = getNextDayBoundary(timezone, nowUtc);
-  const user = createUser(username, hashedPasscode, timezone, nextBoundary, code);
+  const user = createUser(username.toLowerCase(), hashedPasscode, timezone, nextBoundary, code);
   const token = generateToken();
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
   createSession(token, user.id, expiresAt);
@@ -23,7 +23,7 @@ export async function signup(username: string, passcode: string, timezone: strin
 }
 
 export async function login(username: string, passcode: string): Promise<{ user: User; token: string }> {
-  const user = getUserByUsername(username);
+  const user = getUserByUsername(username.toLowerCase());
   if (!user) throw new Error("Invalid username or passcode");
   const valid = await Bun.password.verify(passcode, user.passcode);
   if (!valid) throw new Error("Invalid username or passcode");
