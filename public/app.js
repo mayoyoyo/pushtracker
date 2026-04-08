@@ -255,8 +255,8 @@ function renderDashboard(app, data) {
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
         <div style="flex:1"></div>
         <div style="text-align:center">
-          <div style="font-size:18px;font-weight:700">${data.group_name || 'Pushup Challenge'}</div>
-          ${data.group_name ? '<div style="font-size:12px;color:var(--text-dim)">Pushup Challenge</div>' : ''}
+          <div style="font-size:18px;font-weight:700">${data.group_name || 'Push-up Challenge'}</div>
+          ${data.group_name ? '<div style="font-size:12px;color:var(--text-dim)">Push-up Challenge</div>' : ''}
         </div>
         <div style="flex:1;display:flex;justify-content:flex-end">
           <button class="settings-btn" id="settings-btn"><i data-lucide="settings" style="width:18px;height:18px"></i></button>
@@ -278,6 +278,7 @@ function renderDashboard(app, data) {
 
   function renderMeTab() {
     const pct = data.daily_target > 0 ? Math.min(100, (data.today_total / data.daily_target) * 100) : 0;
+    const done = data.daily_target > 0 && data.today_total >= data.daily_target;
 
     app.innerHTML = `
       ${tabHeader()}
@@ -292,10 +293,10 @@ function renderDashboard(app, data) {
           ${streakText(data.streak) ? `<div style="font-size:12px;color:var(--text-dim);margin-top:2px">${streakText(data.streak)}</div>` : ''}
         </div>
       </div>
-      <div class="progress-card">
-        <div class="progress-label">Today</div>
-        <div class="progress-count">${data.today_total} <span class="progress-target">/ ${data.daily_target}</span></div>
-        <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+      <div class="progress-card" style="${done ? 'border-color:#22c55e;box-shadow:0 0 20px rgba(34,197,94,0.15),0 0 60px rgba(34,197,94,0.05)' : ''}">
+        <div class="progress-label">${done ? '✓ COMPLETE' : 'Today'}</div>
+        <div class="progress-count" style="${done ? 'color:#22c55e' : ''}">${data.today_total} <span class="progress-target">/ ${data.daily_target}</span></div>
+        <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;${done ? 'background:#22c55e' : ''}"></div></div>
       </div>
       ${data.debt > 0 ? `
       <div class="debt-card">
