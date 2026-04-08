@@ -7,6 +7,20 @@ async function loadPose() {
   return poseModule;
 }
 
+function playCongratsSound() {
+  function tone(freq, dur, delay) {
+    setTimeout(() => {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator(); const gain = ctx.createGain();
+      osc.frequency.value = freq; gain.gain.value = 0.3;
+      osc.connect(gain); gain.connect(ctx.destination); osc.start();
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+      osc.stop(ctx.currentTime + dur);
+    }, delay);
+  }
+  tone(523, 0.15, 0); tone(659, 0.15, 180); tone(784, 0.2, 360);
+}
+
 async function api(method, path, body) {
   const opts = { method, headers: { 'content-type': 'application/json' }, credentials: 'same-origin' };
   if (body) opts.body = JSON.stringify(body);
@@ -464,49 +478,35 @@ function showTutorial(onStart) {
   app.innerHTML = `
     <div class="camera-screen" style="background:var(--bg);overflow-y:auto">
       <div style="padding:24px 20px;max-width:400px;margin:0 auto">
-        <h2 style="text-align:center;margin-bottom:8px">${isStd ? 'Standard Mode' : 'Noob Mode'}</h2>
+        <h2 style="text-align:center;margin-bottom:8px">${isStd ? 'One Punch Mode' : 'Noob Mode'}</h2>
         <div style="display:flex;justify-content:center;margin-bottom:16px">
           <div style="display:inline-flex;background:var(--surface-2);border-radius:8px;overflow:hidden">
-            <button id="mode-noob" style="padding:8px 16px;border:none;font-size:13px;font-weight:500;cursor:pointer;background:${!isStd ? 'var(--primary)' : 'transparent'};color:${!isStd ? 'var(--primary-fg)' : 'var(--text)'}">Noob</button>
-            <button id="mode-std" style="padding:8px 16px;border:none;font-size:13px;font-weight:500;cursor:pointer;background:${isStd ? 'var(--danger)' : 'transparent'};color:${isStd ? '#fff' : 'var(--text)'}">Standard</button>
+            <button id="mode-noob" style="padding:8px 16px;border:none;font-size:13px;font-weight:500;cursor:pointer;background:${!isStd ? 'var(--primary)' : 'transparent'};color:${!isStd ? 'var(--primary-fg)' : 'var(--text)'}">🔥 Noob</button>
+            <button id="mode-std" style="padding:8px 16px;border:none;font-size:13px;font-weight:500;cursor:pointer;background:${isStd ? 'var(--danger)' : 'transparent'};color:${isStd ? '#fff' : 'var(--text)'}"><img src="/opm-fist.png" style="width:16px;height:16px;vertical-align:middle"> One Punch</button>
           </div>
         </div>
 
         ${isStd ? `
-        <div style="background:rgba(252,129,129,0.1);border:1px solid var(--danger);border-radius:10px;padding:14px 16px;margin-bottom:16px;text-align:center">
-          <div style="font-size:15px;font-weight:700;color:var(--danger);margin-bottom:4px">Real ones only.</div>
-          <div style="font-size:13px;color:var(--text-dim)">No knee pushups. No shortcuts. Full range of motion, verified.</div>
-        </div>
-        <div style="border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px">
-          <div style="font-weight:600;margin-bottom:10px">Side-view setup:</div>
-          <ul style="padding-left:18px;line-height:1.8;font-size:14px;color:var(--text-dim)">
-            <li><strong style="color:var(--text)">Place camera to your side</strong> -- it needs to see your full profile</li>
-            <li><strong style="color:var(--text)">Full body visible</strong> -- head to feet, including ankles</li>
-            <li><strong style="color:var(--text)">Prop it 1-2 feet off the ground</strong> -- slightly elevated works best</li>
-            <li><strong style="color:var(--text)">Wait for the chime</strong> -- a sound plays when the camera is ready</li>
-          </ul>
+        <div style="text-align:center;margin-bottom:16px">
+          <img src="/opm-fist.png" style="width:64px;height:64px">
         </div>
         <div style="border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:20px">
-          <div style="font-weight:600;margin-bottom:10px">How it works:</div>
-          <p style="font-size:14px;color:var(--text-dim);line-height:1.6">
-            Tracks your shoulder movement from the side. Waits until it can see your full body, then counts reps by vertical shoulder displacement. Rejects knee pushups and camera movement.
-          </p>
+          <div style="font-weight:600;margin-bottom:12px;text-align:center">Setup in 3 steps:</div>
+          <div style="display:flex;flex-direction:column;gap:12px;font-size:14px">
+            <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:18px">1</span><span style="color:var(--text-dim)"><strong style="color:var(--text)">Phone to your side</strong> — prop it 1-2 feet off the ground, landscape or portrait</span></div>
+            <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:18px">2</span><span style="color:var(--text-dim)"><strong style="color:var(--text)">Full body in frame</strong> — head to feet, including ankles</span></div>
+            <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:18px">3</span><span style="color:var(--text-dim)"><strong style="color:var(--text)">Wait for the chime</strong> — green border = ready to go</span></div>
+          </div>
         </div>
         ` : `
-        <div style="border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px">
-          <div style="font-weight:600;margin-bottom:10px">Front-facing setup:</div>
-          <ul style="padding-left:18px;line-height:1.8;font-size:14px;color:var(--text-dim)">
-            <li><strong style="color:var(--text)">Face the camera</strong> -- place phone/laptop in front of you on the floor</li>
-            <li><strong style="color:var(--text)">Camera sees your face + shoulders</strong> -- that's all it needs</li>
-            <li><strong style="color:var(--text)">Stable surface</strong> -- don't bump the camera during your set</li>
-            <li><strong style="color:var(--text)">Good lighting</strong> -- overhead or side lighting works best</li>
-          </ul>
-        </div>
+        <div style="text-align:center;margin-bottom:16px;font-size:48px">🔥</div>
         <div style="border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:20px">
-          <div style="font-weight:600;margin-bottom:10px">How it works:</div>
-          <p style="font-size:14px;color:var(--text-dim);line-height:1.6">
-            Tracks your nose + shoulder vertical movement, elbow angle, and wrist stability. Easier to set up but allows knee pushups.
-          </p>
+          <div style="font-weight:600;margin-bottom:12px;text-align:center">Setup in 3 steps:</div>
+          <div style="display:flex;flex-direction:column;gap:12px;font-size:14px">
+            <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:18px">1</span><span style="color:var(--text-dim)"><strong style="color:var(--text)">Face the camera</strong> — place phone on the floor in front of you</span></div>
+            <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:18px">2</span><span style="color:var(--text-dim)"><strong style="color:var(--text)">Show your face + shoulders</strong> — that's all it needs</span></div>
+            <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:18px">3</span><span style="color:var(--text-dim)"><strong style="color:var(--text)">Wait for the chime</strong> — green border = ready to go</span></div>
+          </div>
         </div>
         `}
 
@@ -575,14 +575,10 @@ async function renderCamera(app) {
         <div class="camera-feed">
           <video id="cam-video" playsinline autoplay muted style="border:3px solid #fc8181;border-radius:8px"></video>
           <canvas id="cam-canvas"></canvas>
-          <div style="position:absolute;top:16px;left:16px;display:flex;gap:8px">
-            <button class="prod-btn" id="cam-stop" title="Stop"><i data-lucide="square" style="width:16px;height:16px"></i></button>
-            <button class="prod-btn" id="cam-flip" title="Flip camera"><i data-lucide="refresh-cw" style="width:16px;height:16px"></i></button>
-          </div>
           <div style="position:absolute;top:16px;right:16px;display:flex;gap:8px;align-items:center">
             <div style="background:rgba(0,0,0,0.5);backdrop-filter:blur(8px);border-radius:20px;padding:6px 12px;font-size:12px;font-weight:600;color:#fff;display:flex;align-items:center;gap:6px">
-              <i data-lucide="${mode === 'standard' ? 'move-horizontal' : 'user'}" style="width:14px;height:14px"></i>
-              ${mode === 'standard' ? 'Side view' : 'Face camera'}
+              ${mode === 'standard' ? '<img src="/opm-fist.png" style="width:14px;height:14px">' : '<i data-lucide="user" style="width:14px;height:14px"></i>'}
+              ${mode === 'standard' ? 'One Punch' : 'Noob'}
             </div>
             <button class="prod-btn" id="cam-help" title="Help">?</button>
           </div>
@@ -591,12 +587,20 @@ async function renderCamera(app) {
             <div id="depth-fill" style="position:absolute;bottom:0;left:0;right:0;height:0%;background:#ef4444;transition:height 0.05s,background 0.1s;border-radius:0 0 5px 5px"></div>
           </div>
           <div id="cam-gate-msg" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:#fff;font-size:16px;font-weight:600;text-shadow:0 2px 8px rgba(0,0,0,0.8);pointer-events:none">
-            Position yourself in frame...
+            ${mode === 'standard' ? 'Stand sideways to the camera' : 'Face the camera'}...
           </div>
-          <div style="position:absolute;bottom:0;left:0;right:0;padding:20px;text-align:center;background:linear-gradient(transparent, rgba(0,0,0,0.7))">
+          <div id="cam-congrats" style="display:none;position:absolute;top:30%;left:50%;transform:translate(-50%,-50%);text-align:center;color:#fff;pointer-events:none">
+            <div style="font-size:24px;font-weight:700;text-shadow:0 2px 8px rgba(0,0,0,0.8)">Daily complete!</div>
+            <div style="font-size:14px;color:rgba(255,255,255,0.7);margin-top:4px">Keep going for extra credit</div>
+          </div>
+          <div style="position:absolute;bottom:70px;left:0;right:0;padding:20px;text-align:center;background:linear-gradient(transparent, rgba(0,0,0,0.7))">
             <div id="cam-count" style="font-size:72px;font-weight:900;letter-spacing:-3px;line-height:1;color:#fff;text-shadow:0 2px 12px rgba(0,0,0,0.5)">0</div>
             <div style="font-size:14px;color:rgba(255,255,255,0.7);margin-top:2px">Reps</div>
             <div id="cam-timer" style="font-size:20px;font-weight:600;color:rgba(255,255,255,0.9);margin-top:4px;font-variant-numeric:tabular-nums">00:00</div>
+          </div>
+          <div id="cam-bottom-bar" style="position:absolute;bottom:0;left:0;right:0;padding:12px 16px;padding-bottom:max(12px, env(safe-area-inset-bottom));display:flex;gap:8px">
+            <button class="btn btn-danger" id="cam-stop" style="flex:1;padding:14px">Stop & Save</button>
+            <button class="prod-btn" id="cam-flip" title="Flip camera"><i data-lucide="refresh-cw" style="width:16px;height:16px"></i></button>
           </div>
         </div>
       </div>
@@ -626,6 +630,12 @@ async function renderCamera(app) {
 
       tracker = pose.startTracking(video, canvas, (count) => {
         countEl.textContent = count;
+        const congratsEl = document.getElementById('cam-congrats');
+        if (congratsEl && count === currentUser.daily_target) {
+          congratsEl.style.display = '';
+          playCongratsSound();
+          setTimeout(() => { congratsEl.style.display = 'none'; }, 3000);
+        }
       }, (d) => {
         if (DEV_VIEW) {
           if (mode === 'standard') {
@@ -656,7 +666,7 @@ async function renderCamera(app) {
             if (d.gateProgress) {
               gateMsg.textContent = 'Hold still...';
             } else if (missing && missing !== 'none') {
-              gateMsg.textContent = 'Position yourself in frame';
+              gateMsg.textContent = mode === 'standard' ? 'Stand sideways to the camera' : 'Face the camera';
             } else {
               gateMsg.textContent = 'Looking for you...';
             }
