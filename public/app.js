@@ -545,7 +545,7 @@ function showTutorial(onStart) {
     <div class="camera-screen" style="background:var(--bg);overflow-y:auto">
       <button id="tut-back" style="position:fixed;top:16px;left:16px;background:none;border:none;color:var(--text-dim);cursor:pointer;padding:8px;z-index:101"><i data-lucide="arrow-left" style="width:20px;height:20px"></i></button>
       <div style="padding:24px 20px;max-width:400px;margin:0 auto">
-        <h2 style="text-align:center;margin-bottom:8px">${isStd ? 'One Punch Mode' : 'Noob Mode'}</h2>
+        <h2 style="text-align:center;margin-bottom:8px;${isStd ? 'color:var(--danger)' : ''}">${isStd ? 'One Punch Mode' : 'Noob Mode'}</h2>
         <div style="display:flex;justify-content:center;margin-bottom:16px">
           <div style="display:inline-flex;background:var(--surface-2);border-radius:8px;overflow:hidden">
             <button id="mode-noob" style="padding:8px 16px;border:none;font-size:13px;font-weight:500;cursor:pointer;background:${!isStd ? 'var(--primary)' : 'transparent'};color:${!isStd ? 'var(--primary-fg)' : 'var(--text)'}">Noob</button>
@@ -778,7 +778,7 @@ async function renderCamera(app) {
       helpOverlay.innerHTML = `
         <div style="padding:24px 20px;max-width:400px;width:100%;position:relative;margin-top:20px">
           <button id="help-close" style="position:absolute;top:0;right:0;background:none;border:none;color:var(--text-dim);cursor:pointer;padding:8px;font-size:20px">&times;</button>
-          <h2 style="text-align:center;margin-bottom:16px">${mode === 'standard' ? 'One Punch Mode' : 'Noob Mode'}</h2>
+          <h2 style="text-align:center;margin-bottom:16px;${mode === 'standard' ? 'color:var(--danger)' : ''}">${mode === 'standard' ? 'One Punch Mode' : 'Noob Mode'}</h2>
           ${getModeContent(mode)}
         </div>
       `;
