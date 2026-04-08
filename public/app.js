@@ -288,9 +288,8 @@ function renderDashboard(app, data) {
           <div class="greeting-name">${data.username}</div>
         </div>
         <div style="text-align:right">
-          <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Last 5 days</div>
-          <div style="font-size:16px;letter-spacing:1px">${streakIcons(data.last5days)}</div>
-          ${streakText(data.streak) ? `<div style="font-size:12px;color:var(--text-dim);margin-top:2px">${streakText(data.streak)}</div>` : ''}
+          <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Streak</div>
+          <div style="font-size:16px;letter-spacing:1px;display:flex;align-items:center;justify-content:flex-end;gap:4px">${streakIcons(data.last5days)}${data.streak && data.streak.count > 0 && data.streak.type === 'hot' ? `<span style="font-size:11px;color:var(--success);font-weight:600;margin-left:4px">${data.streak.count}d</span>` : ''}</div>
         </div>
       </div>
       <div class="progress-card" style="${done ? 'border-color:#22c55e;box-shadow:0 0 20px rgba(34,197,94,0.15),0 0 60px rgba(34,197,94,0.05)' : ''}">
@@ -436,25 +435,29 @@ function showSettings() {
   overlay.className = 'settings-panel';
   overlay.innerHTML = `
     <div class="settings-card">
-      <h3>Settings</h3>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h3 style="margin:0">Settings</h3>
+        <button id="set-close" style="background:none;border:none;color:var(--text-dim);cursor:pointer;padding:4px;font-size:18px;line-height:1">&times;</button>
+      </div>
       <div class="setting-row">
         <span class="setting-label">Daily Target</span>
         <div class="setting-value"><input type="number" id="set-target" value="${currentUser.daily_target}" min="20" inputmode="numeric"></div>
       </div>
+      <div id="target-error" style="display:none;font-size:12px;color:var(--danger);text-align:right;padding:4px 0">Minimum target is 20</div>
       <div class="setting-row">
         <span class="setting-label">Timezone</span>
         <span style="font-size:13px;color:var(--text-dim)">${currentUser.timezone}</span>
       </div>
       <button class="btn btn-primary" style="width:100%;margin-top:16px;margin-bottom:10px" id="set-save">Save</button>
-      <button class="btn btn-danger" style="width:100%;margin-bottom:10px" id="set-logout">Log Out</button>
-      <button class="btn btn-surface" style="width:100%" id="set-close">Close</button>
+      <button class="btn btn-danger" style="width:100%" id="set-logout">Log Out</button>
     </div>
   `;
   document.body.appendChild(overlay); initIcons();
 
   overlay.querySelector('#set-save').addEventListener('click', async () => {
     const target = parseInt(overlay.querySelector('#set-target').value) || 0;
-    if (target < 20) { showToast('Minimum target is 20'); return; }
+    if (target < 20) { document.getElementById('target-error').style.display = ''; return; }
+    document.getElementById('target-error').style.display = 'none';
     await api('PUT', '/api/me/target', { target });
     currentUser.daily_target = target;
     overlay.remove();
