@@ -201,8 +201,9 @@ async function renderCalendar(container, userData) {
       const entry = dayMap[d];
       let icon = '';
       if (isToday && userData.today_total >= userData.daily_target && userData.daily_target > 0) {
-        // Live today completion
-        icon = '🔥'; // Will be refined if we track mode, but fire is safe default
+        // Live today — get mode from last5days (last entry is today)
+        const todayEntry = userData.last5days && userData.last5days.length > 0 ? userData.last5days[userData.last5days.length - 1] : null;
+        icon = (todayEntry && todayEntry.mode === 'standard') ? '<img src="/opm-fist.png" style="width:14px;height:14px">' : '🔥';
       } else if (entry) {
         if (entry.met) {
           icon = entry.mode === 'standard' ? '<img src="/opm-fist.png" style="width:14px;height:14px">' : '🔥';
