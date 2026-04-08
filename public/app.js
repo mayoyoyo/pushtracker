@@ -521,7 +521,7 @@ function getModeContent(mode) {
     <div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:16px">
       <img src="/setup-opm.png" style="width:110px;flex-shrink:0;border-radius:10px;object-fit:contain">
       <div style="flex:1">
-        <div style="display:flex;flex-direction:column;gap:12px;font-size:13px">
+        <div style="display:flex;flex-direction:column;gap:12px;font-size:13px;margin-top:14px">
           <div style="display:flex;gap:8px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:16px">1</span><div><strong style="color:var(--text)">Phone to your side</strong><br><span style="color:var(--text-dim)">It needs to see your full profile</span></div></div>
           <div style="display:flex;gap:8px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:16px">2</span><div><strong style="color:var(--text)">Shoulder to ankle in frame</strong><br><span style="color:var(--text-dim)">Ankles must be visible — reps won't count without them</span></div></div>
           <div style="display:flex;gap:8px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:16px">3</span><div><strong style="color:var(--text)">Wait for the chime</strong><br><span style="color:var(--text-dim)">Green border means ready</span></div></div>
@@ -538,7 +538,7 @@ function getModeContent(mode) {
     <div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:16px">
       <img src="/setup-noob.png" style="width:110px;flex-shrink:0;border-radius:10px;object-fit:contain">
       <div style="flex:1">
-        <div style="display:flex;flex-direction:column;gap:12px;font-size:13px">
+        <div style="display:flex;flex-direction:column;gap:12px;font-size:13px;margin-top:14px">
           <div style="display:flex;gap:8px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:16px">1</span><div><strong style="color:var(--text)">Face the camera</strong><br><span style="color:var(--text-dim)">Place phone on the floor in front of you</span></div></div>
           <div style="display:flex;gap:8px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:16px">2</span><div><strong style="color:var(--text)">Face, shoulders + wrists visible</strong><br><span style="color:var(--text-dim)">Wrists need to be in frame to track</span></div></div>
           <div style="display:flex;gap:8px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:16px">3</span><div><strong style="color:var(--text)">Wait for the chime</strong><br><span style="color:var(--text-dim)">Green border means ready</span></div></div>
