@@ -1,5 +1,5 @@
 import { signup, login, logout, getSessionUser, parseSessionToken, sessionCookie, clearSessionCookie } from "./auth";
-import { logPushups, getTodayLogs, getTodayTotal, getTeamByGroup, updateTarget, updateDebt, updateTimezone, type User } from "./db";
+import { logPushups, getTodayLogs, getTodayTotal, getTeamByGroup, updateTarget, updateDebt, updateTimezone, getGroupName, getDayHistory, type User } from "./db";
 import { getNextDayBoundary, getPreviousDayBoundary } from "./timezone";
 
 function json(data: unknown, status = 200, headers: Record<string, string> = {}): Response {
@@ -64,17 +64,34 @@ export async function handleApiRequest(req: Request): Promise<Response> {
   if (path === "/api/me" && method === "GET") {
     const prevBoundary = getPreviousDayBoundary(user.timezone, user.next_day_boundary);
     const todayTotal = getTodayTotal(user.id, prevBoundary, user.next_day_boundary);
+    const groupName = getGroupName(user.invite_code);
+    const last5days = getDayHistory(user.id, user.timezone, user.next_day_boundary, 5);
+
+    let streakCount = 0;
+    let streakType: 'hot' | 'cold' | 'none' = 'none';
+    if (last5days.length > 1) {
+      streakType = last5days[1].met ? 'hot' : 'cold';
+      for (let i = 1; i < last5days.length; i++) {
+        if ((streakType === 'hot' && last5days[i].met) || (streakType === 'cold' && !last5days[i].met)) {
+          streakCount++;
+        } else break;
+      }
+    }
+
     return json({
       ...publicUserData(user),
       today_total: todayTotal,
       next_day_boundary: user.next_day_boundary,
+      group_name: groupName,
+      last5days,
+      streak: { count: streakCount, type: streakType },
     });
   }
 
   if (path === "/api/me/target" && method === "PUT") {
     const { target } = await req.json();
-    if (typeof target !== "number" || target < 0) {
-      return json({ error: "Target must be a non-negative number" }, 400);
+    if (typeof target !== "number" || target < 20) {
+      return json({ error: "Target must be at least 20" }, 400);
     }
     updateTarget(user.id, target);
     return json({ ok: true, daily_target: target });
@@ -96,14 +113,15 @@ export async function handleApiRequest(req: Request): Promise<Response> {
   }
 
   if (path === "/api/pushups" && method === "POST") {
-    const { count, source } = await req.json();
+    const { count, source, mode } = await req.json();
     if (typeof count !== "number" || count <= 0) {
       return json({ error: "Count must be a positive number" }, 400);
     }
     if (source !== "camera" && source !== "manual") {
       return json({ error: "Source must be 'camera' or 'manual'" }, 400);
     }
-    const log = logPushups(user.id, count, source);
+    const logMode = source === 'manual' ? 'manual' : (mode === 'standard' ? 'standard' : 'noob');
+    const log = logPushups(user.id, count, source, logMode);
 
     // Check if surplus pushups should reduce debt
     if (user.debt > 0 && user.daily_target > 0) {
@@ -130,18 +148,34 @@ export async function handleApiRequest(req: Request): Promise<Response> {
 
   if (path === "/api/team/today" && method === "GET") {
     const allUsers = getTeamByGroup(user.invite_code);
+    const groupName = getGroupName(user.invite_code);
     const team = allUsers.map((u) => {
       const prevBoundary = getPreviousDayBoundary(u.timezone, u.next_day_boundary);
       const todayTotal = getTodayTotal(u.id, prevBoundary, u.next_day_boundary);
+      const last5days = getDayHistory(u.id, u.timezone, u.next_day_boundary, 5);
+
+      let streakCount = 0;
+      let streakType: 'hot' | 'cold' | 'none' = 'none';
+      if (last5days.length > 1) {
+        streakType = last5days[1].met ? 'hot' : 'cold';
+        for (let i = 1; i < last5days.length; i++) {
+          if ((streakType === 'hot' && last5days[i].met) || (streakType === 'cold' && !last5days[i].met)) {
+            streakCount++;
+          } else break;
+        }
+      }
+
       return {
         id: u.id,
         username: u.username,
         daily_target: u.daily_target,
         today_total: todayTotal,
         debt: u.debt,
+        last5days,
+        streak: { count: streakCount, type: streakType },
       };
     });
-    return json(team);
+    return json({ group_name: groupName, team });
   }
 
   return json({ error: "Not found" }, 404);

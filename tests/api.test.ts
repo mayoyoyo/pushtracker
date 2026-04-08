@@ -113,7 +113,7 @@ describe("api", () => {
       const res = await authedRequest("GET", "/api/team/today", token);
       expect(res.status).toBe(200);
       const data = await res.json();
-      expect(data.length).toBe(2);
+      expect(data.team.length).toBe(2);
     });
   });
 });
