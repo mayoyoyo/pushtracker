@@ -293,6 +293,7 @@ function renderDashboard(app, data) {
     const surplus = Math.max(0, data.today_total - data.daily_target);
     const debtCovered = data.debt > 0 ? Math.min(surplus, data.debt) : 0;
     const debtFullyPaid = debtCovered > 0 && debtCovered >= data.debt;
+    const remainingDebt = Math.max(0, data.debt - debtCovered);
 
     app.innerHTML = `
       ${tabHeader()}
@@ -315,9 +316,9 @@ function renderDashboard(app, data) {
         <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;${done ? 'background:#22c55e' : ''}"></div></div>
         ${data.debt > 0 ? `<div style="margin-top:8px;font-size:12px;color:${debtFullyPaid ? '#22c55e' : 'var(--text-muted)'}">${debtFullyPaid ? '✓' : ''} ${debtCovered}/${data.debt} debt covered</div>` : ''}
       </div>
-      ${data.debt > 0 ? `
+      ${remainingDebt > 0 ? `
       <div class="debt-card">
-        <div><div style="font-size:11px;text-transform:uppercase;color:var(--text-dim)">Debt</div><div class="debt-count">${data.debt}</div></div>
+        <div><div style="font-size:11px;text-transform:uppercase;color:var(--text-dim)">Debt</div><div class="debt-count">${remainingDebt}</div></div>
         <div class="debt-label">pushups<br>owed</div>
       </div>` : ''}
       <div style="display:flex;gap:10px;margin-top:16px">
@@ -383,11 +384,13 @@ function renderDashboard(app, data) {
           } else if (m.today_total > 0) {
             statusClass = 'in-progress';
           }
+          const mSurplus = Math.max(0, m.today_total - m.daily_target);
+          const mRemainingDebt = Math.max(0, m.debt - Math.min(mSurplus, m.debt));
           return `
             <div class="team-member">
               <div>
                 <div class="member-name">${m.username} <span style="font-size:14px;letter-spacing:1px">${streakIcons(m.last5days)}</span></div>
-                <div class="member-target">${streakText(m.streak)}${m.debt > 0 ? `<span style="font-size:11px;color:var(--danger);margin-left:${m.streak.count > 0 ? '4' : '0'}px">debt: ${m.debt}</span>` : ''}</div>
+                <div class="member-target">${streakText(m.streak)}${mRemainingDebt > 0 ? `<span style="font-size:11px;color:var(--danger);margin-left:${m.streak.count > 0 ? '4' : '0'}px">debt: ${mRemainingDebt}</span>` : ''}</div>
               </div>
               <div class="member-progress ${statusClass}">${display}</div>
             </div>`;
