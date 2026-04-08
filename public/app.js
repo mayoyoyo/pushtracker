@@ -530,11 +530,12 @@ function showTutorial(onStart) {
 
         ${getModeContent(isStd ? 'standard' : 'noob')}
 
-        <button class="btn btn-primary" style="width:100%" id="tut-start">Start Camera</button>
+        <button class="btn btn-primary" style="width:100%;margin-top:16px" id="tut-start">Start Camera</button>
       </div>
     </div>
   `;
 
+  initIcons();
   document.getElementById('mode-noob').addEventListener('click', () => { cameraMode = 'noob'; showTutorial(onStart); });
   document.getElementById('mode-std').addEventListener('click', () => { cameraMode = 'standard'; showTutorial(onStart); });
   document.getElementById('tut-start').addEventListener('click', onStart);
