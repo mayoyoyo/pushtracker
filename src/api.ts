@@ -34,8 +34,10 @@ export async function handleApiRequest(req: Request): Promise<Response> {
         "set-cookie": sessionCookie(result.token),
       });
     } catch (e: any) {
-      const status = e.message.includes("UNIQUE") ? 409 : 400;
-      return json({ error: e.message }, status);
+      if (e.message.includes("UNIQUE")) {
+        return json({ error: "Username already taken" }, 409);
+      }
+      return json({ error: e.message }, 400);
     }
   }
 
