@@ -683,6 +683,9 @@ async function renderCamera(app) {
       stream = await pose.getCamera(facingMode);
       video.srcObject = stream;
       await video.play();
+      const mirror = facingMode === 'user' ? 'scaleX(-1)' : '';
+      video.style.transform = mirror;
+      canvas.style.transform = mirror;
 
       tracker = pose.startTracking(video, canvas, (count) => {
         countEl.textContent = count;
