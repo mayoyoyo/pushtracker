@@ -1,6 +1,7 @@
 import { signup, login, logout, getSessionUser, parseSessionToken, sessionCookie, clearSessionCookie } from "./auth";
 import { logPushups, getTodayLogs, getTodayTotal, getTeamByGroup, updateTarget, updateDebt, updateTimezone, getGroupName, getMonthResults, type User } from "./db";
 import { getNextDayBoundary, getPreviousDayBoundary } from "./timezone";
+import { processExpiredBoundaries } from "./cron";
 
 function json(data: unknown, status = 200, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(data), {
@@ -48,6 +49,11 @@ export async function handleApiRequest(req: Request): Promise<Response> {
     } catch (e: any) {
       return json({ error: "Invalid username or passcode" }, 401);
     }
+  }
+
+  if (path === "/api/cron" && method === "POST") {
+    processExpiredBoundaries(new Date().toISOString());
+    return json({ ok: true });
   }
 
   // --- Authenticated routes ---
