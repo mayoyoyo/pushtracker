@@ -96,6 +96,7 @@ export async function handleApiRequest(req: Request): Promise<Response> {
       ...publicUserData(user),
       today_total: todayTotal,
       next_day_boundary: user.next_day_boundary,
+      created_at: user.created_at,
       group_name: groupName,
       last5days,
       streak: { count: streakCount, type: streakType },

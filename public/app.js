@@ -205,14 +205,22 @@ async function renderCalendar(container, userData) {
       </div>
     `;
 
+    const created = new Date(userData.created_at ? userData.created_at.replace(' ', 'T') + 'Z' : now);
+    const minYear = created.getFullYear();
+    const minMonth = created.getMonth() + 1;
+
     container.querySelector('#cal-prev').addEventListener('click', () => {
-      month--;
-      if (month < 1) { month = 12; year--; }
+      let prevM = month - 1, prevY = year;
+      if (prevM < 1) { prevM = 12; prevY--; }
+      if (prevY < minYear || (prevY === minYear && prevM < minMonth)) return;
+      month = prevM; year = prevY;
       render();
     });
     container.querySelector('#cal-next').addEventListener('click', () => {
-      month++;
-      if (month > 12) { month = 1; year++; }
+      let nextM = month + 1, nextY = year;
+      if (nextM > 12) { nextM = 1; nextY++; }
+      if (nextY > now.getFullYear() || (nextY === now.getFullYear() && nextM > now.getMonth() + 1)) return;
+      month = nextM; year = nextY;
       render();
     });
   }

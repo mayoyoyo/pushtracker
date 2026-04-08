@@ -150,8 +150,9 @@ export function getDayHistory(userId: number, timezone: string, nextBoundaryUtc:
   for (let i = 0; i < days; i++) {
     const startBoundary = getPreviousDayBoundary(timezone, endBoundary);
 
-    // Skip days before user existed
-    if (user.created_at > endBoundary) {
+    // Skip days before user existed (normalize created_at to ISO for comparison)
+    const createdIso = user.created_at.includes('T') ? user.created_at : user.created_at.replace(' ', 'T') + 'Z';
+    if (createdIso > endBoundary) {
       endBoundary = startBoundary;
       continue;
     }
@@ -179,7 +180,8 @@ export function getMonthHistory(userId: number, boundaries: Array<{ day: number;
   if (!user) return result;
 
   for (const { day, start, end } of boundaries) {
-    if (user.created_at > end) continue;
+    const createdIso = user.created_at.includes('T') ? user.created_at : user.created_at.replace(' ', 'T') + 'Z';
+    if (createdIso > end) continue;
 
     const total = getTodayTotal(userId, start, end);
     const met = user.daily_target > 0 && total >= user.daily_target;
