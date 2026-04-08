@@ -47,7 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function streakIcons(last5days) {
   if (!last5days || !last5days.length) return '';
-  return last5days.map(d => {
+  return [...last5days].reverse().map(d => {
     if (!d.met) return '🧊';
     return d.mode === 'standard' ? '<img src="/opm-fist.png" style="width:22px;height:22px;vertical-align:middle">' : '🔥';
   }).join('');
