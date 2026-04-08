@@ -482,7 +482,7 @@ function getModeContent(mode) {
       <img src="/opm-fist.png" style="width:48px;height:48px">
       <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Streak icon</div>
     </div>
-    <div style="font-weight:600;margin-bottom:10px;font-size:14px;text-align:center">Setup in 3 steps:</div>
+    <div style="font-weight:600;margin-bottom:10px;font-size:16px;text-align:center">Setup in 3 steps:</div>
     <div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:16px">
       <img src="/setup-opm.png" style="width:110px;flex-shrink:0;border-radius:10px;object-fit:contain">
       <div style="flex:1">
@@ -499,7 +499,7 @@ function getModeContent(mode) {
       <div style="font-size:36px">🔥</div>
       <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Streak icon</div>
     </div>
-    <div style="font-weight:600;margin-bottom:10px;font-size:14px;text-align:center">Setup in 3 steps:</div>
+    <div style="font-weight:600;margin-bottom:10px;font-size:16px;text-align:center">Setup in 3 steps:</div>
     <div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:16px">
       <img src="/setup-noob.png" style="width:110px;flex-shrink:0;border-radius:10px;object-fit:contain">
       <div style="flex:1">
