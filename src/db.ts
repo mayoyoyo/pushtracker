@@ -145,7 +145,8 @@ export function getDayHistory(userId: number, timezone: string, nextBoundaryUtc:
   const user = getUserById(userId);
   if (!user) return result;
 
-  let endBoundary = nextBoundaryUtc;
+  // Start from yesterday (skip today — still in progress)
+  let endBoundary = getPreviousDayBoundary(timezone, nextBoundaryUtc);
   for (let i = 0; i < days; i++) {
     const startBoundary = getPreviousDayBoundary(timezone, endBoundary);
 

@@ -65,8 +65,18 @@ export async function handleApiRequest(req: Request): Promise<Response> {
     const prevBoundary = getPreviousDayBoundary(user.timezone, user.next_day_boundary);
     const todayTotal = getTodayTotal(user.id, prevBoundary, user.next_day_boundary);
     const groupName = getGroupName(user.invite_code);
-    const last5days = getDayHistory(user.id, user.timezone, user.next_day_boundary, 5);
+    const pastDays = getDayHistory(user.id, user.timezone, user.next_day_boundary, 5);
 
+    // Prepend today's status so streak updates live when target is met
+    const todayMet = user.daily_target > 0 && todayTotal >= user.daily_target;
+    const todayEntry = { met: todayMet, mode: todayMet ? 'noob' : 'manual' }; // mode refined below if met
+    if (todayMet) {
+      const hasStd = getTodayLogs(user.id, prevBoundary, user.next_day_boundary).some((l: any) => l.mode === 'standard');
+      todayEntry.mode = hasStd ? 'standard' : 'noob';
+    }
+    const last5days = [todayEntry, ...pastDays].slice(0, 5);
+
+    // Streak: count consecutive same-type days from most recent completed day (index 1)
     let streakCount = 0;
     let streakType: 'hot' | 'cold' | 'none' = 'none';
     if (last5days.length > 1) {
@@ -77,6 +87,10 @@ export async function handleApiRequest(req: Request): Promise<Response> {
         } else break;
       }
     }
+    // If today is met and yesterday was met too, add today to hot streak
+    if (todayMet && streakType === 'hot') streakCount++;
+    // If today is met, can't be cold streak
+    if (todayMet && streakType === 'cold') { streakType = 'none'; streakCount = 0; }
 
     return json({
       ...publicUserData(user),
@@ -152,7 +166,14 @@ export async function handleApiRequest(req: Request): Promise<Response> {
     const team = allUsers.map((u) => {
       const prevBoundary = getPreviousDayBoundary(u.timezone, u.next_day_boundary);
       const todayTotal = getTodayTotal(u.id, prevBoundary, u.next_day_boundary);
-      const last5days = getDayHistory(u.id, u.timezone, u.next_day_boundary, 5);
+      const pastDays = getDayHistory(u.id, u.timezone, u.next_day_boundary, 5);
+      const todayMet = u.daily_target > 0 && todayTotal >= u.daily_target;
+      const todayEntry = { met: todayMet, mode: 'manual' as string };
+      if (todayMet) {
+        const hasStd = getTodayLogs(u.id, prevBoundary, u.next_day_boundary).some((l: any) => l.mode === 'standard');
+        todayEntry.mode = hasStd ? 'standard' : 'noob';
+      }
+      const last5days = [todayEntry, ...pastDays].slice(0, 5);
 
       let streakCount = 0;
       let streakType: 'hot' | 'cold' | 'none' = 'none';
@@ -164,6 +185,8 @@ export async function handleApiRequest(req: Request): Promise<Response> {
           } else break;
         }
       }
+      if (todayMet && streakType === 'hot') streakCount++;
+      if (todayMet && streakType === 'cold') { streakType = 'none'; streakCount = 0; }
 
       return {
         id: u.id,
