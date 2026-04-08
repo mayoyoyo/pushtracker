@@ -162,10 +162,10 @@ export function getDayHistory(userId: number, timezone: string, nextBoundaryUtc:
 
     let mode = 'manual';
     if (met) {
-      const hasStandard = db.prepare(
-        "SELECT 1 FROM pushup_logs WHERE user_id = ? AND logged_at >= ? AND logged_at < ? AND mode = 'standard' LIMIT 1"
-      ).get(userId, startBoundary, endBoundary);
-      mode = hasStandard ? 'standard' : 'noob';
+      const stdRow = db.prepare(
+        "SELECT COALESCE(SUM(count), 0) as total FROM pushup_logs WHERE user_id = ? AND logged_at >= ? AND logged_at < ? AND mode = 'standard'"
+      ).get(userId, startBoundary, endBoundary) as { total: number };
+      mode = stdRow.total >= user.daily_target ? 'standard' : 'noob';
     }
 
     result.push({ met, mode });
@@ -188,10 +188,10 @@ export function getMonthHistory(userId: number, boundaries: Array<{ day: number;
 
     let mode = 'manual';
     if (met) {
-      const hasStandard = db.prepare(
-        "SELECT 1 FROM pushup_logs WHERE user_id = ? AND logged_at >= ? AND logged_at < ? AND mode = 'standard' LIMIT 1"
-      ).get(userId, start, end);
-      mode = hasStandard ? 'standard' : 'noob';
+      const stdRow = db.prepare(
+        "SELECT COALESCE(SUM(count), 0) as total FROM pushup_logs WHERE user_id = ? AND logged_at >= ? AND logged_at < ? AND mode = 'standard'"
+      ).get(userId, start, end) as { total: number };
+      mode = stdRow.total >= user.daily_target ? 'standard' : 'noob';
     }
 
     result.push({ day, met, mode });

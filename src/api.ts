@@ -69,10 +69,12 @@ export async function handleApiRequest(req: Request): Promise<Response> {
 
     // Prepend today's status so streak updates live when target is met
     const todayMet = user.daily_target > 0 && todayTotal >= user.daily_target;
-    const todayEntry = { met: todayMet, mode: todayMet ? 'noob' : 'manual' }; // mode refined below if met
+    const todayEntry = { met: todayMet, mode: 'manual' as string };
     if (todayMet) {
-      const hasStd = getTodayLogs(user.id, prevBoundary, user.next_day_boundary).some((l: any) => l.mode === 'standard');
-      todayEntry.mode = hasStd ? 'standard' : 'noob';
+      const stdTotal = getTodayLogs(user.id, prevBoundary, user.next_day_boundary)
+        .filter((l: any) => l.mode === 'standard')
+        .reduce((sum: number, l: any) => sum + l.count, 0);
+      todayEntry.mode = stdTotal >= user.daily_target ? 'standard' : 'noob';
     }
     const last5days = [todayEntry, ...pastDays].slice(0, 5);
 
@@ -171,8 +173,10 @@ export async function handleApiRequest(req: Request): Promise<Response> {
       const todayMet = u.daily_target > 0 && todayTotal >= u.daily_target;
       const todayEntry = { met: todayMet, mode: 'manual' as string };
       if (todayMet) {
-        const hasStd = getTodayLogs(u.id, prevBoundary, u.next_day_boundary).some((l: any) => l.mode === 'standard');
-        todayEntry.mode = hasStd ? 'standard' : 'noob';
+        const stdTotal = getTodayLogs(u.id, prevBoundary, u.next_day_boundary)
+          .filter((l: any) => l.mode === 'standard')
+          .reduce((sum: number, l: any) => sum + l.count, 0);
+        todayEntry.mode = stdTotal >= u.daily_target ? 'standard' : 'noob';
       }
       const last5days = [todayEntry, ...pastDays].slice(0, 5);
 
