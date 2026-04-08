@@ -40,10 +40,8 @@ function streakIcons(last5days) {
 }
 
 function streakText(streak) {
-  if (!streak || streak.count === 0) return '';
-  if (streak.type === 'hot') return `${streak.count} day streak 🔥`;
-  if (streak.type === 'cold') return `${streak.count} day cold streak 🧊`;
-  return '';
+  if (!streak || streak.count === 0 || streak.type !== 'hot') return '';
+  return `${streak.count} day streak 🔥`;
 }
 
 function showScreen(name, data) {
@@ -187,8 +185,6 @@ async function renderCalendar(container, userData) {
       if (entry) {
         if (entry.met) {
           icon = entry.mode === 'standard' ? '<img src="/opm-fist.png" style="width:14px;height:14px">' : '🔥';
-        } else {
-          icon = '🧊';
         }
       }
       const todayStyle = isToday ? 'border:2px solid #ef4444;border-radius:50%;' : '';
@@ -269,8 +265,9 @@ function renderDashboard(app, data) {
           <div class="greeting-name">${data.username}</div>
         </div>
         <div style="text-align:right">
+          <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">Last 5 days</div>
           <div style="font-size:16px;letter-spacing:1px">${streakIcons(data.last5days)}</div>
-          <div style="font-size:12px;color:var(--text-dim);margin-top:2px">${streakText(data.streak)}</div>
+          ${streakText(data.streak) ? `<div style="font-size:12px;color:var(--text-dim);margin-top:2px">${streakText(data.streak)}</div>` : ''}
         </div>
       </div>
       <div class="progress-card">
