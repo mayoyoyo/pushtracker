@@ -534,7 +534,7 @@ function getModeContent(mode) {
       <div style="flex:1">
         <div style="display:flex;flex-direction:column;gap:12px;font-size:13px">
           <div style="display:flex;gap:8px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:16px">1</span><div><strong style="color:var(--text)">Face the camera</strong><br><span style="color:var(--text-dim)">Place phone on the floor in front of you</span></div></div>
-          <div style="display:flex;gap:8px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:16px">2</span><div><strong style="color:var(--text)">Face + shoulders visible</strong><br><span style="color:var(--text-dim)">That's all it needs to track</span></div></div>
+          <div style="display:flex;gap:8px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:16px">2</span><div><strong style="color:var(--text)">Face, shoulders + wrists visible</strong><br><span style="color:var(--text-dim)">Wrists need to be in frame to track</span></div></div>
           <div style="display:flex;gap:8px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:16px">3</span><div><strong style="color:var(--text)">Wait for the chime</strong><br><span style="color:var(--text-dim)">Green border means ready</span></div></div>
         </div>
       </div>
