@@ -10,7 +10,7 @@ describe("cron", () => {
   test("adds debt when user misses target", () => {
     const user = createUser("hanson", "hash", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
     updateTarget(user.id, 50);
-    logPushups(user.id, 30, "camera", "2026-04-06T14:00:00Z");
+    logPushups(user.id, 30, "camera", "manual", "2026-04-06T14:00:00Z");
     processExpiredBoundaries("2026-04-07T12:00:00Z");
     const updated = getUserById(user.id)!;
     expect(updated.debt).toBe(20);
@@ -20,7 +20,7 @@ describe("cron", () => {
   test("no debt when user meets target", () => {
     const user = createUser("hanson", "hash", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
     updateTarget(user.id, 50);
-    logPushups(user.id, 60, "camera", "2026-04-06T14:00:00Z");
+    logPushups(user.id, 60, "camera", "manual", "2026-04-06T14:00:00Z");
     processExpiredBoundaries("2026-04-07T12:00:00Z");
     const updated = getUserById(user.id)!;
     expect(updated.debt).toBe(0);
@@ -46,6 +46,7 @@ describe("cron", () => {
 
   test("no debt when target is 0", () => {
     const user = createUser("hanson", "hash", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
+    updateTarget(user.id, 0);
     processExpiredBoundaries("2026-04-07T12:00:00Z");
     const updated = getUserById(user.id)!;
     expect(updated.debt).toBe(0);

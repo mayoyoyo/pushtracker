@@ -1,4 +1,5 @@
 import { Database } from "bun:sqlite";
+import { getPreviousDayBoundary } from "./timezone";
 
 let db: Database;
 
@@ -11,7 +12,7 @@ export function getDb(path: string = "pushtracker.db"): Database {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT UNIQUE NOT NULL,
       passcode TEXT NOT NULL,
-      daily_target INTEGER NOT NULL DEFAULT 0,
+      daily_target INTEGER NOT NULL DEFAULT 20,
       debt INTEGER NOT NULL DEFAULT 0,
       timezone TEXT NOT NULL,
       next_day_boundary TEXT NOT NULL,
@@ -36,9 +37,15 @@ export function getDb(path: string = "pushtracker.db"): Database {
   `);
   // Add invite_code column if missing (migration for existing DBs)
   try { db.exec("ALTER TABLE users ADD COLUMN invite_code TEXT NOT NULL DEFAULT 'DEV0'"); } catch {}
+  // Add group_name to invite_codes
+  try { db.exec("ALTER TABLE invite_codes ADD COLUMN group_name TEXT NOT NULL DEFAULT ''"); } catch {}
+  // Add mode to pushup_logs
+  try { db.exec("ALTER TABLE pushup_logs ADD COLUMN mode TEXT NOT NULL DEFAULT 'manual'"); } catch {}
   // Seed invite codes
-  db.prepare("INSERT OR IGNORE INTO invite_codes (code) VALUES ('DEV0')").run();
-  db.prepare("INSERT OR IGNORE INTO invite_codes (code) VALUES ('FRST')").run();
+  db.prepare("INSERT OR IGNORE INTO invite_codes (code, group_name) VALUES ('DEV0', 'MayoLab')").run();
+  db.prepare("INSERT OR IGNORE INTO invite_codes (code, group_name) VALUES ('FRST', 'Frist')").run();
+  db.prepare("UPDATE invite_codes SET group_name = 'MayoLab' WHERE code = 'DEV0' AND group_name = ''").run();
+  db.prepare("UPDATE invite_codes SET group_name = 'Frist' WHERE code = 'FRST' AND group_name = ''").run();
   // Migrate any old DEV users to DEV0
   db.prepare("UPDATE users SET invite_code = 'DEV0' WHERE invite_code = 'DEV'").run();
   return db;
@@ -61,6 +68,7 @@ export interface PushupLog {
   user_id: number;
   count: number;
   source: string;
+  mode: string;
   logged_at: string;
 }
 
@@ -99,15 +107,15 @@ export function updateNextDayBoundary(userId: number, nextDayBoundary: string): 
   db.prepare("UPDATE users SET next_day_boundary = ? WHERE id = ?").run(nextDayBoundary, userId);
 }
 
-export function logPushups(userId: number, count: number, source: string, loggedAt?: string): PushupLog {
+export function logPushups(userId: number, count: number, source: string, mode: string = 'manual', loggedAt?: string): PushupLog {
   if (loggedAt) {
     return db.prepare(
-      "INSERT INTO pushup_logs (user_id, count, source, logged_at) VALUES (?, ?, ?, ?) RETURNING *"
-    ).get(userId, count, source, loggedAt) as PushupLog;
+      "INSERT INTO pushup_logs (user_id, count, source, mode, logged_at) VALUES (?, ?, ?, ?, ?) RETURNING *"
+    ).get(userId, count, source, mode, loggedAt) as PushupLog;
   }
   return db.prepare(
-    "INSERT INTO pushup_logs (user_id, count, source) VALUES (?, ?, ?) RETURNING *"
-  ).get(userId, count, source) as PushupLog;
+    "INSERT INTO pushup_logs (user_id, count, source, mode) VALUES (?, ?, ?, ?) RETURNING *"
+  ).get(userId, count, source, mode) as PushupLog;
 }
 
 export function getTodayLogs(userId: number, dayStart: string, dayEnd: string): PushupLog[] {
@@ -125,6 +133,36 @@ export function getTodayTotal(userId: number, dayStart: string, dayEnd: string):
 
 export function getTeamByGroup(inviteCode: string): User[] {
   return db.prepare("SELECT * FROM users WHERE invite_code = ? ORDER BY username").all(inviteCode) as User[];
+}
+
+export function getGroupName(inviteCode: string): string {
+  const row = db.prepare("SELECT group_name FROM invite_codes WHERE code = ?").get(inviteCode) as { group_name: string } | null;
+  return row?.group_name || inviteCode;
+}
+
+export function getDayHistory(userId: number, timezone: string, nextBoundaryUtc: string, days: number = 5): Array<{ met: boolean; mode: string }> {
+  const result: Array<{ met: boolean; mode: string }> = [];
+  const user = getUserById(userId);
+  if (!user) return result;
+
+  let endBoundary = nextBoundaryUtc;
+  for (let i = 0; i < days; i++) {
+    const startBoundary = getPreviousDayBoundary(timezone, endBoundary);
+    const total = getTodayTotal(userId, startBoundary, endBoundary);
+    const met = user.daily_target > 0 && total >= user.daily_target;
+
+    let mode = 'manual';
+    if (met) {
+      const hasStandard = db.prepare(
+        "SELECT 1 FROM pushup_logs WHERE user_id = ? AND logged_at >= ? AND logged_at < ? AND mode = 'standard' LIMIT 1"
+      ).get(userId, startBoundary, endBoundary);
+      mode = hasStandard ? 'standard' : 'noob';
+    }
+
+    result.push({ met, mode });
+    endBoundary = startBoundary;
+  }
+  return result;
 }
 
 export function getUsersWithExpiredBoundary(now: string): User[] {

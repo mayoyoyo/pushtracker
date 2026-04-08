@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from "bun:test";
-import { getDb, createUser, getUserByUsername, getUserById, logPushups, getTodayLogs, getTeamByGroup, updateTarget, updateDebt } from "../src/db";
+import { getDb, createUser, getUserByUsername, getUserById, logPushups, getTodayLogs, getTeamByGroup, updateTarget, updateDebt, getGroupName, getDayHistory } from "../src/db";
 
 describe("database", () => {
   beforeEach(() => {
@@ -11,7 +11,7 @@ describe("database", () => {
       const user = createUser("hanson", "hashedpass", "America/New_York", "2026-04-08T11:00:00Z", "DEV0");
       expect(user.id).toBe(1);
       expect(user.username).toBe("hanson");
-      expect(user.daily_target).toBe(0);
+      expect(user.daily_target).toBe(20);
       expect(user.debt).toBe(0);
       expect(user.timezone).toBe("America/New_York");
     });
@@ -47,9 +47,9 @@ describe("database", () => {
   describe("getTodayLogs", () => {
     test("returns logs between day boundaries", () => {
       const user = createUser("hanson", "hash", "America/New_York", "2026-04-08T11:00:00Z", "DEV0");
-      logPushups(user.id, 25, "camera", "2026-04-07T12:00:00Z");
-      logPushups(user.id, 10, "manual", "2026-04-07T20:00:00Z");
-      logPushups(user.id, 50, "camera", "2026-04-07T05:00:00Z");
+      logPushups(user.id, 25, "camera", "manual", "2026-04-07T12:00:00Z");
+      logPushups(user.id, 10, "manual", "manual", "2026-04-07T20:00:00Z");
+      logPushups(user.id, 50, "camera", "manual", "2026-04-07T05:00:00Z");
 
       const logs = getTodayLogs(user.id, "2026-04-07T11:00:00Z", "2026-04-08T11:00:00Z");
       expect(logs.length).toBe(2);
@@ -63,8 +63,8 @@ describe("database", () => {
       const u2 = createUser("jake", "h2", "America/New_York", "2026-04-08T11:00:00Z", "DEV0");
       updateTarget(u1.id, 50);
       updateTarget(u2.id, 75);
-      logPushups(u1.id, 32, "camera", "2026-04-07T14:00:00Z");
-      logPushups(u2.id, 75, "camera", "2026-04-07T14:00:00Z");
+      logPushups(u1.id, 32, "camera", "manual", "2026-04-07T14:00:00Z");
+      logPushups(u2.id, 75, "camera", "manual", "2026-04-07T14:00:00Z");
 
       const team = getTeamByGroup("DEV0");
       expect(team.length).toBe(2);
@@ -94,6 +94,30 @@ describe("database", () => {
       updateDebt(user.id, -25);
       const updated = getUserById(user.id);
       expect(updated!.debt).toBe(0);
+    });
+  });
+
+  describe("getGroupName", () => {
+    test("returns group name for known code", () => {
+      expect(getGroupName("DEV0")).toBe("MayoLab");
+    });
+
+    test("returns code itself for unknown code", () => {
+      expect(getGroupName("ZZZZ")).toBe("ZZZZ");
+    });
+  });
+
+  describe("logPushups with mode", () => {
+    test("stores mode field", () => {
+      const user = createUser("modetest", "hash", "UTC", "2026-04-08T07:00:00Z", "DEV0");
+      const log = logPushups(user.id, 10, "camera", "standard");
+      expect(log.mode).toBe("standard");
+    });
+
+    test("defaults mode to manual", () => {
+      const user = createUser("modetest2", "hash", "UTC", "2026-04-08T07:00:00Z", "DEV0");
+      const log = logPushups(user.id, 10, "manual");
+      expect(log.mode).toBe("manual");
     });
   });
 });

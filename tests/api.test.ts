@@ -62,7 +62,7 @@ describe("api", () => {
       expect(res.status).toBe(200);
       const data = await res.json();
       expect(data.username).toBe("hanson");
-      expect(data.daily_target).toBe(0);
+      expect(data.daily_target).toBe(20);
       expect(data.debt).toBe(0);
     });
 
