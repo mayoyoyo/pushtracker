@@ -78,7 +78,7 @@ export function validateInviteCode(code: string): boolean {
 
 export function createUser(username: string, passcode: string, timezone: string, nextDayBoundary: string, inviteCode: string): User {
   const stmt = db.prepare(
-    "INSERT INTO users (username, passcode, timezone, next_day_boundary, invite_code) VALUES (?, ?, ?, ?, ?) RETURNING *"
+    "INSERT INTO users (username, passcode, daily_target, timezone, next_day_boundary, invite_code) VALUES (?, ?, 20, ?, ?, ?) RETURNING *"
   );
   return stmt.get(username, passcode, timezone, nextDayBoundary, inviteCode) as User;
 }
