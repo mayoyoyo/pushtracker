@@ -51,7 +51,7 @@ export async function handleApiRequest(req: Request): Promise<Response> {
     }
   }
 
-  if (path === "/api/cron" && method === "POST") {
+  if (path === "/api/cron" && (method === "POST" || method === "GET")) {
     processExpiredBoundaries(new Date().toISOString());
     return json({ ok: true });
   }
