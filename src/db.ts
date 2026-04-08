@@ -173,6 +173,30 @@ export function getDayHistory(userId: number, timezone: string, nextBoundaryUtc:
   return result;
 }
 
+export function getMonthHistory(userId: number, boundaries: Array<{ day: number; start: string; end: string }>): Array<{ day: number; met: boolean; mode: string }> {
+  const result: Array<{ day: number; met: boolean; mode: string }> = [];
+  const user = getUserById(userId);
+  if (!user) return result;
+
+  for (const { day, start, end } of boundaries) {
+    if (user.created_at > end) continue;
+
+    const total = getTodayTotal(userId, start, end);
+    const met = user.daily_target > 0 && total >= user.daily_target;
+
+    let mode = 'manual';
+    if (met) {
+      const hasStandard = db.prepare(
+        "SELECT 1 FROM pushup_logs WHERE user_id = ? AND logged_at >= ? AND logged_at < ? AND mode = 'standard' LIMIT 1"
+      ).get(userId, start, end);
+      mode = hasStandard ? 'standard' : 'noob';
+    }
+
+    result.push({ day, met, mode });
+  }
+  return result;
+}
+
 export function getUsersWithExpiredBoundary(now: string): User[] {
   return db.prepare("SELECT * FROM users WHERE next_day_boundary <= ?").all(now) as User[];
 }

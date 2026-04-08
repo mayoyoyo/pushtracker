@@ -161,6 +161,69 @@ async function loadDashboard() {
   showScreen('dashboard', data);
 }
 
+async function renderCalendar(container, userData) {
+  const now = new Date();
+  let year = now.getFullYear();
+  let month = now.getMonth() + 1;
+
+  async function render() {
+    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const resp = await api('GET', `/api/me/calendar?year=${year}&month=${month}`);
+    const dayMap = {};
+    (resp.days || []).forEach(d => { dayMap[d.day] = d; });
+
+    const firstDay = new Date(year, month - 1, 1).getDay();
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const today = now.getDate();
+    const isCurrentMonth = year === now.getFullYear() && month === now.getMonth() + 1;
+
+    let gridHtml = '';
+    // Empty cells for offset
+    for (let i = 0; i < firstDay; i++) gridHtml += '<div class="cal-cell"></div>';
+    for (let d = 1; d <= daysInMonth; d++) {
+      const isToday = isCurrentMonth && d === today;
+      const entry = dayMap[d];
+      let icon = '';
+      if (entry) {
+        if (entry.met) {
+          icon = entry.mode === 'standard' ? '<img src="/opm-fist.png" style="width:14px;height:14px">' : '🔥';
+        } else {
+          icon = '🧊';
+        }
+      }
+      const todayStyle = isToday ? 'border:2px solid #ef4444;border-radius:50%;' : '';
+      gridHtml += `<div class="cal-cell" style="${todayStyle}"><div style="font-size:11px;color:var(--text-muted)">${d}</div><div style="font-size:12px;line-height:1">${icon}</div></div>`;
+    }
+
+    container.innerHTML = `
+      <div style="border:1px solid var(--border);border-radius:12px;padding:16px;margin-top:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <button class="cal-nav" id="cal-prev" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--text);cursor:pointer;padding:4px 8px;font-size:14px">&larr;</button>
+          <div style="font-weight:600;font-size:14px">${monthNames[month-1]} ${year}</div>
+          <button class="cal-nav" id="cal-next" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--text);cursor:pointer;padding:4px 8px;font-size:14px">&rarr;</button>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);text-align:center;gap:2px">
+          ${'SMTWTFS'.split('').map(d => `<div style="font-size:10px;color:var(--text-muted);padding:4px 0">${d}</div>`).join('')}
+          ${gridHtml}
+        </div>
+      </div>
+    `;
+
+    container.querySelector('#cal-prev').addEventListener('click', () => {
+      month--;
+      if (month < 1) { month = 12; year--; }
+      render();
+    });
+    container.querySelector('#cal-next').addEventListener('click', () => {
+      month++;
+      if (month > 12) { month = 1; year++; }
+      render();
+    });
+  }
+
+  await render();
+}
+
 function renderDashboard(app, data) {
   let activeTab = 'me';
 
@@ -228,12 +291,14 @@ function renderDashboard(app, data) {
           <span class="icon"><i data-lucide="plus" style="width:22px;height:22px"></i></span><span class="label">Manual</span>
         </button>
       </div>
+      <div id="calendar-container"></div>
     `;
 
     bindTabs();
     app.querySelector('#btn-camera').addEventListener('click', () => showScreen('camera'));
     app.querySelector('#btn-manual').addEventListener('click', () => showManualEntry());
     initIcons();
+    renderCalendar(document.getElementById('calendar-container'), data);
   }
 
   async function renderTeamTab() {

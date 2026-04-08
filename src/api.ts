@@ -1,5 +1,5 @@
 import { signup, login, logout, getSessionUser, parseSessionToken, sessionCookie, clearSessionCookie } from "./auth";
-import { logPushups, getTodayLogs, getTodayTotal, getTeamByGroup, updateTarget, updateDebt, updateTimezone, getGroupName, getDayHistory, type User } from "./db";
+import { logPushups, getTodayLogs, getTodayTotal, getTeamByGroup, updateTarget, updateDebt, updateTimezone, getGroupName, getDayHistory, getMonthHistory, type User } from "./db";
 import { getNextDayBoundary, getPreviousDayBoundary } from "./timezone";
 
 function json(data: unknown, status = 200, headers: Record<string, string> = {}): Response {
@@ -199,6 +199,29 @@ export async function handleApiRequest(req: Request): Promise<Response> {
       };
     });
     return json({ group_name: groupName, team });
+  }
+
+  if (path === "/api/me/calendar" && method === "GET") {
+    const year = parseInt(url.searchParams.get("year") || "");
+    const month = parseInt(url.searchParams.get("month") || "");
+    if (!year || !month || month < 1 || month > 12) {
+      return json({ error: "year and month required" }, 400);
+    }
+
+    const { DateTime } = await import("luxon");
+    const daysInMonth = DateTime.local(year, month).daysInMonth;
+    const boundaries: Array<{ day: number; start: string; end: string }> = [];
+    const now = new Date().toISOString();
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dayStart = DateTime.fromObject({ year, month, day, hour: 7 }, { zone: user.timezone }).toUTC().toISO()!;
+      const dayEnd = DateTime.fromObject({ year, month, day, hour: 7 }, { zone: user.timezone }).plus({ days: 1 }).toUTC().toISO()!;
+      if (dayStart > now) break;
+      boundaries.push({ day, start: dayStart, end: dayEnd });
+    }
+
+    const history = getMonthHistory(user.id, boundaries);
+    return json({ year, month, days: history });
   }
 
   return json({ error: "Not found" }, 404);

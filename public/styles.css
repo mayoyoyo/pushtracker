@@ -230,3 +230,6 @@ body {
 }
 .toast.hidden { opacity: 0; pointer-events: none; }
 .hidden { display: none !important; }
+
+/* Calendar */
+.cal-cell { display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:36px;padding:2px; }
