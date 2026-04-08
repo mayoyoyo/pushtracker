@@ -82,7 +82,7 @@ export async function handleApiRequest(req: Request): Promise<Response> {
     }
     const everLogged = hasEverLoggedPushups(user.id);
     const pastIcons = user.last5 ? user.last5.split(',') : [];
-    const allIcons = everLogged ? [...pastIcons, todayIcon].slice(-5) : [];
+    const allIcons = everLogged ? (todayMet ? [...pastIcons, todayIcon] : pastIcons).slice(-5) : [];
     const last5days = allIcons.map(i => ({ met: i === 'S' || i === 'F', mode: i === 'S' ? 'standard' : i === 'F' ? 'noob' : 'manual' }));
 
     // Streak: user.streak is from completed days, add 1 if today is met and streak was going
@@ -162,7 +162,7 @@ export async function handleApiRequest(req: Request): Promise<Response> {
       }
       const everLogged = hasEverLoggedPushups(u.id);
       const pastIcons = u.last5 ? u.last5.split(',') : [];
-      const allIcons = everLogged ? [...pastIcons, todayIcon].slice(-5) : [];
+      const allIcons = everLogged ? (todayMet ? [...pastIcons, todayIcon] : pastIcons).slice(-5) : [];
       const last5days = allIcons.map((i: string) => ({ met: i === 'S' || i === 'F', mode: i === 'S' ? 'standard' : i === 'F' ? 'noob' : 'manual' }));
 
       let streakCount = u.streak;
