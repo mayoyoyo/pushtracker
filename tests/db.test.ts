@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from "bun:test";
-import { getDb, createUser, getUserByUsername, getUserById, logPushups, getTodayLogs, getTeamByGroup, updateTarget, updateDebt, getGroupName, getDayHistory } from "../src/db";
+import { getDb, createUser, getUserByUsername, getUserById, logPushups, getTodayLogs, getTeamByGroup, updateTarget, updateDebt, getGroupName, getDayHistory, getSlackConfig } from "../src/db";
 
 describe("database", () => {
   beforeEach(() => {
@@ -104,6 +104,25 @@ describe("database", () => {
 
     test("returns code itself for unknown code", () => {
       expect(getGroupName("ZZZZ")).toBe("ZZZZ");
+    });
+  });
+
+  describe("getSlackConfig", () => {
+    test("returns null when no slack config set", () => {
+      expect(getSlackConfig("DEV0")).toBeNull();
+    });
+
+    test("returns config when both token and channel are set", () => {
+      const db = getDb(":memory:");
+      db.prepare("UPDATE invite_codes SET slack_bot_token = 'xoxb-test', slack_channel = 'C123' WHERE code = 'DEV0'").run();
+      const config = getSlackConfig("DEV0");
+      expect(config).toEqual({ slack_bot_token: "xoxb-test", slack_channel: "C123" });
+    });
+
+    test("returns null when only token is set", () => {
+      const db = getDb(":memory:");
+      db.prepare("UPDATE invite_codes SET slack_bot_token = 'xoxb-test' WHERE code = 'DEV0'").run();
+      expect(getSlackConfig("DEV0")).toBeNull();
     });
   });
 

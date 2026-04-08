@@ -44,6 +44,9 @@ export function getDb(path: string = "pushtracker.db"): Database {
   // Streak columns on users: last5 = comma-separated day results (S/F/I), streak = hot streak count
   try { db.exec("ALTER TABLE users ADD COLUMN last5 TEXT NOT NULL DEFAULT ''"); } catch {}
   try { db.exec("ALTER TABLE users ADD COLUMN streak INTEGER NOT NULL DEFAULT 0"); } catch {}
+  // Slack integration columns on invite_codes
+  try { db.exec("ALTER TABLE invite_codes ADD COLUMN slack_bot_token TEXT"); } catch {}
+  try { db.exec("ALTER TABLE invite_codes ADD COLUMN slack_channel TEXT"); } catch {}
   // Day results for calendar history
   db.exec(`CREATE TABLE IF NOT EXISTS day_results (
     user_id INTEGER NOT NULL REFERENCES users(id),
@@ -174,6 +177,12 @@ export function getGroupName(inviteCode: string): string {
 
 export function getUsersWithExpiredBoundary(now: string): User[] {
   return db.prepare("SELECT * FROM users WHERE next_day_boundary <= ?").all(now) as User[];
+}
+
+export function getSlackConfig(inviteCode: string): { slack_bot_token: string; slack_channel: string } | null {
+  const row = db.prepare("SELECT slack_bot_token, slack_channel FROM invite_codes WHERE code = ?").get(inviteCode) as { slack_bot_token: string | null; slack_channel: string | null } | null;
+  if (!row || !row.slack_bot_token || !row.slack_channel) return null;
+  return { slack_bot_token: row.slack_bot_token, slack_channel: row.slack_channel };
 }
 
 // Session management
