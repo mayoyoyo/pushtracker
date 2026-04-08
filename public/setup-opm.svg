@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 180" fill="none">
+  <!-- Floor -->
+  <line x1="20" y1="150" x2="280" y2="150" stroke="#3f3f46" stroke-width="2"/>
+
+  <!-- Person doing pushup (side view) -->
+  <!-- Head -->
+  <circle cx="80" cy="100" r="14" stroke="#a1a1aa" stroke-width="2"/>
+  <!-- Body (angled plank) -->
+  <line x1="94" y1="100" x2="220" y2="120" stroke="#a1a1aa" stroke-width="2"/>
+  <!-- Front arm (bent) -->
+  <line x1="94" y1="100" x2="85" y2="130" stroke="#a1a1aa" stroke-width="2"/>
+  <line x1="85" y1="130" x2="75" y2="148" stroke="#a1a1aa" stroke-width="2"/>
+  <circle cx="75" cy="148" r="3" fill="#a1a1aa"/>
+  <!-- Legs -->
+  <line x1="220" y1="120" x2="240" y2="148" stroke="#a1a1aa" stroke-width="2"/>
+  <circle cx="240" cy="148" r="3" fill="#a1a1aa"/>
+
+  <!-- Phone to the side (propped up) -->
+  <rect x="255" y="118" width="16" height="32" rx="3" stroke="#22c55e" stroke-width="2" fill="#18181b"/>
+  <!-- Camera dot -->
+  <circle cx="263" cy="130" r="2" fill="#22c55e"/>
+
+  <!-- Arrow from phone to person -->
+  <line x1="253" y1="130" x2="245" y2="130" stroke="#22c55e" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <polygon points="248,127 242,130 248,133" fill="#22c55e"/>
+
+  <!-- Full body bracket -->
+  <line x1="65" y1="82" x2="65" y2="155" stroke="#22c55e" stroke-width="1" stroke-dasharray="3 2"/>
+  <text x="60" y="78" text-anchor="middle" fill="#22c55e" font-size="9" font-family="system-ui">full body</text>
+
+  <!-- Label -->
+  <text x="150" y="175" text-anchor="middle" fill="#a1a1aa" font-size="11" font-family="system-ui">Phone to your side, full body visible</text>
+</svg>

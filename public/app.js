@@ -494,6 +494,9 @@ function showTutorial(onStart) {
         <div style="text-align:center;margin-bottom:16px">
           <img src="/opm-fist.png" style="width:64px;height:64px">
         </div>
+        <div style="text-align:center;margin-bottom:16px">
+          <img src="/setup-opm.svg" style="width:100%;max-width:280px;border-radius:10px">
+        </div>
         <div style="border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:20px">
           <div style="font-weight:600;margin-bottom:12px;text-align:center">Setup in 3 steps:</div>
           <div style="display:flex;flex-direction:column;gap:12px;font-size:14px">
@@ -504,6 +507,9 @@ function showTutorial(onStart) {
         </div>
         ` : `
         <div style="text-align:center;margin-bottom:16px;font-size:48px">🔥</div>
+        <div style="text-align:center;margin-bottom:16px">
+          <img src="/setup-noob.svg" style="width:100%;max-width:280px;border-radius:10px">
+        </div>
         <div style="border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:20px">
           <div style="font-weight:600;margin-bottom:12px;text-align:center">Setup in 3 steps:</div>
           <div style="display:flex;flex-direction:column;gap:12px;font-size:14px">
