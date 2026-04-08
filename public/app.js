@@ -31,6 +31,21 @@ document.addEventListener('DOMContentLoaded', () => {
   if (window.lucide) { lucideReady = true; initIcons(); }
 });
 
+function streakIcons(last5days) {
+  if (!last5days || !last5days.length) return '';
+  return last5days.map(d => {
+    if (!d.met) return '🧊';
+    return d.mode === 'standard' ? '<img src="/opm-fist.png" style="width:16px;height:16px;vertical-align:middle">' : '🔥';
+  }).join('');
+}
+
+function streakText(streak) {
+  if (!streak || streak.count === 0) return '';
+  if (streak.type === 'hot') return `${streak.count} day streak 🔥`;
+  if (streak.type === 'cold') return `${streak.count} day cold streak 🧊`;
+  return '';
+}
+
 function showScreen(name, data) {
   currentScreen = name;
   const app = document.getElementById('app');
@@ -38,7 +53,6 @@ function showScreen(name, data) {
     case 'auth': renderAuth(app); break;
     case 'dashboard': renderDashboard(app, data); break;
     case 'camera': renderCamera(app); break;
-    case 'team': renderTeam(app); break;
     default: app.innerHTML = '<p>Loading...</p>';
   }
   initIcons();
@@ -148,43 +162,132 @@ async function loadDashboard() {
 }
 
 function renderDashboard(app, data) {
-  const pct = data.daily_target > 0 ? Math.min(100, (data.today_total / data.daily_target) * 100) : 0;
+  let activeTab = 'me';
 
-  app.innerHTML = `
-    <div class="dashboard-header">
-      <div>
-        <div class="greeting-sub">Hey,</div>
-        <div class="greeting-name">${data.username}</div>
+  function renderTab() {
+    if (activeTab === 'me') renderMeTab();
+    else renderTeamTab();
+  }
+
+  function tabHeader() {
+    return `
+      <div style="text-align:center;margin-bottom:12px">
+        <div style="font-size:18px;font-weight:700">${data.group_name || 'Pushup Challenge'}</div>
+        ${data.group_name ? '<div style="font-size:12px;color:var(--text-dim)">Pushup Challenge</div>' : ''}
       </div>
-      <button class="settings-btn" id="settings-btn"><i data-lucide="settings" style="width:20px;height:20px"></i></button>
-    </div>
-    <div class="progress-card">
-      <div class="progress-label">Today</div>
-      <div class="progress-count">${data.today_total} <span class="progress-target">/ ${data.daily_target}</span></div>
-      <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
-    </div>
-    ${data.debt > 0 ? `
-    <div class="debt-card">
-      <div><div style="font-size:11px;text-transform:uppercase;color:var(--text-dim)">Debt</div><div class="debt-count">${data.debt}</div></div>
-      <div class="debt-label">pushups<br>owed</div>
-    </div>` : ''}
-    <div class="action-buttons">
-      <button class="action-btn primary" id="btn-camera">
-        <span class="icon"><i data-lucide="camera" style="width:22px;height:22px"></i></span><span class="label">Camera</span>
-      </button>
-      <button class="action-btn" id="btn-manual">
-        <span class="icon"><i data-lucide="plus" style="width:22px;height:22px"></i></span><span class="label">Manual</span>
-      </button>
-      <button class="action-btn" id="btn-team">
-        <span class="icon"><i data-lucide="users" style="width:22px;height:22px"></i></span><span class="label">Team</span>
-      </button>
-    </div>
-  `;
+      <div style="display:flex;justify-content:center;margin-bottom:16px">
+        <div style="display:inline-flex;background:var(--surface-2);border-radius:8px;overflow:hidden">
+          <button id="tab-me" style="padding:8px 24px;border:none;font-size:13px;font-weight:500;cursor:pointer;background:${activeTab === 'me' ? 'var(--primary)' : 'transparent'};color:${activeTab === 'me' ? 'var(--primary-fg)' : 'var(--text)'}">Me</button>
+          <button id="tab-team" style="padding:8px 24px;border:none;font-size:13px;font-weight:500;cursor:pointer;background:${activeTab === 'team' ? 'var(--primary)' : 'transparent'};color:${activeTab === 'team' ? 'var(--primary-fg)' : 'var(--text)'}">Team</button>
+        </div>
+      </div>`;
+  }
 
-  app.querySelector('#btn-camera').addEventListener('click', () => showScreen('camera'));
-  app.querySelector('#btn-manual').addEventListener('click', () => showManualEntry());
-  app.querySelector('#btn-team').addEventListener('click', () => showScreen('team'));
-  app.querySelector('#settings-btn').addEventListener('click', () => showSettings());
+  function bindTabs() {
+    app.querySelector('#tab-me').addEventListener('click', () => { activeTab = 'me'; renderTab(); });
+    app.querySelector('#tab-team').addEventListener('click', () => { activeTab = 'team'; renderTab(); });
+  }
+
+  function renderMeTab() {
+    const pct = data.daily_target > 0 ? Math.min(100, (data.today_total / data.daily_target) * 100) : 0;
+
+    app.innerHTML = `
+      ${tabHeader()}
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div>
+          <div class="greeting-sub">Hey,</div>
+          <div class="greeting-name">${data.username}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:16px;letter-spacing:1px">${streakIcons(data.last5days)}</div>
+          <div style="font-size:12px;color:var(--text-dim);margin-top:2px">${streakText(data.streak)}</div>
+        </div>
+      </div>
+      <div class="progress-card">
+        <div class="progress-label">Today</div>
+        <div class="progress-count">${data.today_total} <span class="progress-target">/ ${data.daily_target}</span></div>
+        <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+      </div>
+      ${data.debt > 0 ? `
+      <div class="debt-card">
+        <div><div style="font-size:11px;text-transform:uppercase;color:var(--text-dim)">Debt</div><div class="debt-count">${data.debt}</div></div>
+        <div class="debt-label">pushups<br>owed</div>
+      </div>` : ''}
+      <div style="display:flex;gap:10px;margin-top:16px">
+        <button class="action-btn primary" id="btn-camera" style="flex:3">
+          <span class="icon"><i data-lucide="camera" style="width:22px;height:22px"></i></span><span class="label">Record</span>
+        </button>
+        <button class="action-btn" id="btn-manual" style="flex:1">
+          <span class="icon"><i data-lucide="plus" style="width:22px;height:22px"></i></span><span class="label">Manual</span>
+        </button>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-top:24px">
+        <button class="settings-btn" id="settings-btn"><i data-lucide="settings" style="width:20px;height:20px"></i></button>
+      </div>
+    `;
+
+    bindTabs();
+    app.querySelector('#btn-camera').addEventListener('click', () => showScreen('camera'));
+    app.querySelector('#btn-manual').addEventListener('click', () => showManualEntry());
+    app.querySelector('#settings-btn').addEventListener('click', () => showSettings());
+    initIcons();
+  }
+
+  async function renderTeamTab() {
+    app.innerHTML = `
+      ${tabHeader()}
+      <div style="text-align:center;color:var(--text-dim);padding:32px 0">Loading team...</div>
+    `;
+    bindTabs();
+    initIcons();
+
+    try {
+      const res = await api('GET', '/api/team/today');
+      const team = res.team || res;
+
+      team.sort((a, b) => {
+        const aDone = a.daily_target > 0 && a.today_total >= a.daily_target;
+        const bDone = b.daily_target > 0 && b.today_total >= b.daily_target;
+        if (aDone !== bDone) return aDone ? 1 : -1;
+        return a.username.localeCompare(b.username);
+      });
+
+      app.innerHTML = `
+        ${tabHeader()}
+        ${team.map(m => {
+          let statusClass = 'not-started';
+          let display = `${m.today_total} / ${m.daily_target}`;
+          if (m.daily_target > 0 && m.today_total >= m.daily_target) {
+            statusClass = 'complete';
+            display = `${m.today_total} <i data-lucide="check" style="width:16px;height:16px;display:inline"></i>`;
+          } else if (m.today_total > 0) {
+            statusClass = 'in-progress';
+          }
+          return `
+            <div class="team-member">
+              <div>
+                <div class="member-name">${m.username} <span style="font-size:14px;letter-spacing:1px">${streakIcons(m.last5days)}</span></div>
+                <div class="member-target">Target: ${m.daily_target} <span style="font-size:11px;color:var(--text-dim);margin-left:4px">${streakText(m.streak)}</span></div>
+                ${m.debt > 0 ? `<div class="member-debt">Debt: ${m.debt}</div>` : ''}
+              </div>
+              <div class="member-progress ${statusClass}">${display}</div>
+            </div>`;
+        }).join('')}
+      `;
+
+      bindTabs();
+      initIcons();
+    } catch (err) {
+      app.innerHTML = `
+        ${tabHeader()}
+        <div style="text-align:center;color:var(--text-dim);padding:32px 0">Failed to load team</div>
+      `;
+      bindTabs();
+      initIcons();
+    }
+  }
+
+  renderTab();
 }
 
 function showManualEntry() {
@@ -248,7 +351,7 @@ function showSettings() {
       <h3>Settings</h3>
       <div class="setting-row">
         <span class="setting-label">Daily Target</span>
-        <div class="setting-value"><input type="number" id="set-target" value="${currentUser.daily_target}" inputmode="numeric"></div>
+        <div class="setting-value"><input type="number" id="set-target" value="${currentUser.daily_target}" min="20" inputmode="numeric"></div>
       </div>
       <div class="setting-row">
         <span class="setting-label">Timezone</span>
@@ -263,6 +366,7 @@ function showSettings() {
 
   overlay.querySelector('#set-save').addEventListener('click', async () => {
     const target = parseInt(overlay.querySelector('#set-target').value) || 0;
+    if (target < 20) { showToast('Minimum target is 20'); return; }
     await api('PUT', '/api/me/target', { target });
     currentUser.daily_target = target;
     overlay.remove();
@@ -277,46 +381,6 @@ function showSettings() {
   });
   overlay.querySelector('#set-close').addEventListener('click', () => overlay.remove());
   overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
-}
-
-async function renderTeam(app) {
-  const team = await api('GET', '/api/team/today');
-  team.sort((a, b) => {
-    const aDone = a.daily_target > 0 && a.today_total >= a.daily_target;
-    const bDone = b.daily_target > 0 && b.today_total >= b.daily_target;
-    if (aDone !== bDone) return aDone ? 1 : -1;
-    return a.username.localeCompare(b.username);
-  });
-
-  app.innerHTML = `
-    <div class="team-screen">
-      <div class="team-header">
-        <h2>Team</h2>
-        <button class="back-btn" id="back-dash"><i data-lucide="arrow-left" style="width:16px;height:16px;display:inline;vertical-align:middle"></i> Back</button>
-      </div>
-      ${team.map(m => {
-        let statusClass = 'not-started';
-        let display = `${m.today_total} / ${m.daily_target}`;
-        if (m.daily_target > 0 && m.today_total >= m.daily_target) {
-          statusClass = 'complete';
-          display = `${m.today_total} <i data-lucide="check" style="width:16px;height:16px;display:inline"></i>`;
-        } else if (m.today_total > 0) {
-          statusClass = 'in-progress';
-        }
-        return `
-          <div class="team-member">
-            <div>
-              <div class="member-name">${m.username}</div>
-              <div class="member-target">Target: ${m.daily_target}</div>
-              ${m.debt > 0 ? `<div class="member-debt">Debt: ${m.debt}</div>` : ''}
-            </div>
-            <div class="member-progress ${statusClass}">${display}</div>
-          </div>`;
-      }).join('')}
-    </div>
-  `;
-
-  app.querySelector('#back-dash').addEventListener('click', () => loadDashboard());
 }
 
 let cameraMode = 'noob'; // 'noob' or 'standard'
@@ -393,7 +457,7 @@ async function renderCamera(app) {
     let stream = null;
     let tracker = null;
     const mode = cameraMode;
-    const DEV_VIEW = mode === 'standard';
+    const DEV_VIEW = false;
     let sessionStartTime = null;
     let timerInterval = null;
 
@@ -558,7 +622,7 @@ async function renderCamera(app) {
       const count = tracker ? tracker.getCount() : 0;
       stopCamera();
       if (count > 0) {
-        await api('POST', '/api/pushups', { count, source: 'camera' });
+        await api('POST', '/api/pushups', { count, source: 'camera', mode });
         showToast(`Saved ${count} pushups`);
       }
       await loadDashboard();
