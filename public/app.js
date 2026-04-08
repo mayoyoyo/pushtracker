@@ -494,7 +494,7 @@ function showTutorial(onStart) {
         <div style="border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:20px">
           <div style="font-weight:600;margin-bottom:12px;text-align:center">Setup in 3 steps:</div>
           <div style="display:flex;flex-direction:column;gap:12px;font-size:14px">
-            <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:18px">1</span><span style="color:var(--text-dim)"><strong style="color:var(--text)">Phone to your side</strong> — prop it 1-2 feet off the ground, landscape or portrait</span></div>
+            <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:18px">1</span><span style="color:var(--text-dim)"><strong style="color:var(--text)">Phone to your side</strong> — prop it 1-2 feet off the ground</span></div>
             <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:18px">2</span><span style="color:var(--text-dim)"><strong style="color:var(--text)">Full body in frame</strong> — head to feet, including ankles</span></div>
             <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:18px">3</span><span style="color:var(--text-dim)"><strong style="color:var(--text)">Wait for the chime</strong> — green border = ready to go</span></div>
           </div>
