@@ -293,7 +293,10 @@ function renderDashboard(app, data) {
         </div>
       </div>
       <div class="progress-card" style="${done ? 'border-color:#22c55e;box-shadow:0 0 20px rgba(34,197,94,0.15),0 0 60px rgba(34,197,94,0.05)' : ''}">
-        <div class="progress-label">${done ? '✓ COMPLETE' : 'Today'}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div class="progress-label">${done ? '✓ COMPLETE' : 'Today'}</div>
+          <div style="font-size:11px;color:var(--text-muted)" id="time-left"></div>
+        </div>
         <div class="progress-count" style="${done ? 'color:#22c55e' : ''}">${data.today_total} <span class="progress-target">/ ${data.daily_target}</span></div>
         <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;${done ? 'background:#22c55e' : ''}"></div></div>
       </div>
@@ -318,6 +321,21 @@ function renderDashboard(app, data) {
     app.querySelector('#btn-manual').addEventListener('click', () => showManualEntry());
     initIcons();
     renderCalendar(document.getElementById('calendar-container'), data);
+
+    // Time remaining
+    if (data.next_day_boundary) {
+      const timeEl = document.getElementById('time-left');
+      function updateTimeLeft() {
+        const ms = new Date(data.next_day_boundary).getTime() - Date.now();
+        if (ms <= 0) { timeEl.textContent = 'resetting...'; return; }
+        const totalMin = Math.floor(ms / 60000);
+        const h = Math.floor(totalMin / 60);
+        const m = totalMin % 60;
+        timeEl.textContent = h > 0 ? `${h}h ${m}m left` : `${m}m left`;
+      }
+      updateTimeLeft();
+      setInterval(updateTimeLeft, 60000);
+    }
   }
 
   async function renderTeamTab() {
@@ -530,7 +548,7 @@ function showTutorial(onStart) {
 
         ${getModeContent(isStd ? 'standard' : 'noob')}
 
-        <button class="btn btn-primary" style="width:100%;margin-top:24px" id="tut-start">Start Recording</button>
+        <button class="btn ${isStd ? 'btn-danger' : 'btn-primary'}" style="width:100%;margin-top:24px" id="tut-start">Start Recording</button>
       </div>
     </div>
   `;

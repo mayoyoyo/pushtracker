@@ -1,5 +1,5 @@
 import { signup, login, logout, getSessionUser, parseSessionToken, sessionCookie, clearSessionCookie } from "./auth";
-import { logPushups, getTodayLogs, getTodayTotal, getTeamByGroup, updateTarget, updateDebt, updateTimezone, getGroupName, getDayHistory, getMonthHistory, type User } from "./db";
+import { logPushups, getTodayLogs, getTodayTotal, getTeamByGroup, updateTarget, updateDebt, updateTimezone, getGroupName, getMonthResults, type User } from "./db";
 import { getNextDayBoundary, getPreviousDayBoundary } from "./timezone";
 
 function json(data: unknown, status = 200, headers: Record<string, string> = {}): Response {
@@ -65,34 +65,23 @@ export async function handleApiRequest(req: Request): Promise<Response> {
     const prevBoundary = getPreviousDayBoundary(user.timezone, user.next_day_boundary);
     const todayTotal = getTodayTotal(user.id, prevBoundary, user.next_day_boundary);
     const groupName = getGroupName(user.invite_code);
-    const pastDays = getDayHistory(user.id, user.timezone, user.next_day_boundary, 5);
-
-    // Prepend today's status so streak updates live when target is met
+    // Parse last5 from user row, prepend today's live status
     const todayMet = user.daily_target > 0 && todayTotal >= user.daily_target;
-    const todayEntry = { met: todayMet, mode: 'manual' as string };
+    let todayIcon = 'I';
     if (todayMet) {
       const stdTotal = getTodayLogs(user.id, prevBoundary, user.next_day_boundary)
         .filter((l: any) => l.mode === 'standard')
         .reduce((sum: number, l: any) => sum + l.count, 0);
-      todayEntry.mode = stdTotal >= user.daily_target ? 'standard' : 'noob';
+      todayIcon = stdTotal >= user.daily_target ? 'S' : 'F';
     }
-    const last5days = [todayEntry, ...pastDays].slice(0, 5);
+    const pastIcons = user.last5 ? user.last5.split(',') : [];
+    const allIcons = [...pastIcons, todayIcon].slice(-5);
+    const last5days = allIcons.map(i => ({ met: i === 'S' || i === 'F', mode: i === 'S' ? 'standard' : i === 'F' ? 'noob' : 'manual' }));
 
-    // Streak: count consecutive same-type days from most recent completed day (index 1)
-    let streakCount = 0;
-    let streakType: 'hot' | 'cold' | 'none' = 'none';
-    if (last5days.length > 1) {
-      streakType = last5days[1].met ? 'hot' : 'cold';
-      for (let i = 1; i < last5days.length; i++) {
-        if ((streakType === 'hot' && last5days[i].met) || (streakType === 'cold' && !last5days[i].met)) {
-          streakCount++;
-        } else break;
-      }
-    }
-    // If today is met and yesterday was met too, add today to hot streak
-    if (todayMet && streakType === 'hot') streakCount++;
-    // If today is met, can't be cold streak
-    if (todayMet && streakType === 'cold') { streakType = 'none'; streakCount = 0; }
+    // Streak: user.streak is from completed days, add 1 if today is met and streak was going
+    let streakCount = user.streak;
+    if (todayMet && streakCount > 0) streakCount++;
+    else if (todayMet) streakCount = 1;
 
     return json({
       ...publicUserData(user),
@@ -101,7 +90,7 @@ export async function handleApiRequest(req: Request): Promise<Response> {
       created_at: user.created_at,
       group_name: groupName,
       last5days,
-      streak: { count: streakCount, type: streakType },
+      streak: { count: streakCount, type: streakCount > 0 ? 'hot' : 'none' },
     });
   }
 
@@ -169,29 +158,21 @@ export async function handleApiRequest(req: Request): Promise<Response> {
     const team = allUsers.map((u) => {
       const prevBoundary = getPreviousDayBoundary(u.timezone, u.next_day_boundary);
       const todayTotal = getTodayTotal(u.id, prevBoundary, u.next_day_boundary);
-      const pastDays = getDayHistory(u.id, u.timezone, u.next_day_boundary, 5);
       const todayMet = u.daily_target > 0 && todayTotal >= u.daily_target;
-      const todayEntry = { met: todayMet, mode: 'manual' as string };
+      let todayIcon = 'I';
       if (todayMet) {
         const stdTotal = getTodayLogs(u.id, prevBoundary, u.next_day_boundary)
           .filter((l: any) => l.mode === 'standard')
           .reduce((sum: number, l: any) => sum + l.count, 0);
-        todayEntry.mode = stdTotal >= u.daily_target ? 'standard' : 'noob';
+        todayIcon = stdTotal >= u.daily_target ? 'S' : 'F';
       }
-      const last5days = [todayEntry, ...pastDays].slice(0, 5);
+      const pastIcons = u.last5 ? u.last5.split(',') : [];
+      const allIcons = [...pastIcons, todayIcon].slice(-5);
+      const last5days = allIcons.map((i: string) => ({ met: i === 'S' || i === 'F', mode: i === 'S' ? 'standard' : i === 'F' ? 'noob' : 'manual' }));
 
-      let streakCount = 0;
-      let streakType: 'hot' | 'cold' | 'none' = 'none';
-      if (last5days.length > 1) {
-        streakType = last5days[1].met ? 'hot' : 'cold';
-        for (let i = 1; i < last5days.length; i++) {
-          if ((streakType === 'hot' && last5days[i].met) || (streakType === 'cold' && !last5days[i].met)) {
-            streakCount++;
-          } else break;
-        }
-      }
-      if (todayMet && streakType === 'hot') streakCount++;
-      if (todayMet && streakType === 'cold') { streakType = 'none'; streakCount = 0; }
+      let streakCount = u.streak;
+      if (todayMet && streakCount > 0) streakCount++;
+      else if (todayMet) streakCount = 1;
 
       return {
         id: u.id,
@@ -200,7 +181,7 @@ export async function handleApiRequest(req: Request): Promise<Response> {
         today_total: todayTotal,
         debt: u.debt,
         last5days,
-        streak: { count: streakCount, type: streakType },
+        streak: { count: streakCount, type: streakCount > 0 ? 'hot' : 'none' },
       };
     });
     return json({ group_name: groupName, team });
@@ -213,20 +194,13 @@ export async function handleApiRequest(req: Request): Promise<Response> {
       return json({ error: "year and month required" }, 400);
     }
 
-    const { DateTime } = await import("luxon");
-    const daysInMonth = DateTime.local(year, month).daysInMonth;
-    const boundaries: Array<{ day: number; start: string; end: string }> = [];
-    const now = new Date().toISOString();
-
-    for (let day = 1; day <= daysInMonth; day++) {
-      const dayStart = DateTime.fromObject({ year, month, day, hour: 7 }, { zone: user.timezone }).toUTC().toISO()!;
-      const dayEnd = DateTime.fromObject({ year, month, day, hour: 7 }, { zone: user.timezone }).plus({ days: 1 }).toUTC().toISO()!;
-      if (dayStart > now) break;
-      boundaries.push({ day, start: dayStart, end: dayEnd });
-    }
-
-    const history = getMonthHistory(user.id, boundaries);
-    return json({ year, month, days: history });
+    const yearMonth = `${year}-${String(month).padStart(2, '0')}`;
+    const results = getMonthResults(user.id, yearMonth);
+    const days = results.map(r => {
+      const day = parseInt(r.day_date.split('-')[2]);
+      return { day, met: r.met, mode: r.mode };
+    });
+    return json({ year, month, days });
   }
 
   return json({ error: "Not found" }, 404);

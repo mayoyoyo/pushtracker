@@ -1,5 +1,5 @@
 import { Database } from "bun:sqlite";
-import { getPreviousDayBoundary } from "./timezone";
+
 
 let db: Database;
 
@@ -41,6 +41,18 @@ export function getDb(path: string = "pushtracker.db"): Database {
   try { db.exec("ALTER TABLE invite_codes ADD COLUMN group_name TEXT NOT NULL DEFAULT ''"); } catch {}
   // Add mode to pushup_logs
   try { db.exec("ALTER TABLE pushup_logs ADD COLUMN mode TEXT NOT NULL DEFAULT 'manual'"); } catch {}
+  // Streak columns on users: last5 = comma-separated day results (S/F/I), streak = hot streak count
+  try { db.exec("ALTER TABLE users ADD COLUMN last5 TEXT NOT NULL DEFAULT ''"); } catch {}
+  try { db.exec("ALTER TABLE users ADD COLUMN streak INTEGER NOT NULL DEFAULT 0"); } catch {}
+  // Day results for calendar history
+  db.exec(`CREATE TABLE IF NOT EXISTS day_results (
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    day_date TEXT NOT NULL,
+    met INTEGER NOT NULL DEFAULT 0,
+    mode TEXT NOT NULL DEFAULT 'manual',
+    total INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (user_id, day_date)
+  )`);
   // Seed invite codes
   db.prepare("INSERT OR IGNORE INTO invite_codes (code, group_name) VALUES ('DEV0', 'MayoLab')").run();
   db.prepare("INSERT OR IGNORE INTO invite_codes (code, group_name) VALUES ('FRST', 'Frist')").run();
@@ -61,6 +73,8 @@ export interface User {
   invite_code: string;
   next_day_boundary: string;
   created_at: string;
+  last5: string;
+  streak: number;
 }
 
 export interface PushupLog {
@@ -135,69 +149,28 @@ export function getTeamByGroup(inviteCode: string): User[] {
   return db.prepare("SELECT * FROM users WHERE invite_code = ? ORDER BY username").all(inviteCode) as User[];
 }
 
+export function saveDayResult(userId: number, dayDate: string, met: boolean, mode: string, total: number): void {
+  db.prepare(
+    "INSERT OR REPLACE INTO day_results (user_id, day_date, met, mode, total) VALUES (?, ?, ?, ?, ?)"
+  ).run(userId, dayDate, met ? 1 : 0, mode, total);
+}
+
+export function getMonthResults(userId: number, yearMonth: string): Array<{ day_date: string; met: boolean; mode: string; total: number }> {
+  const rows = db.prepare(
+    "SELECT * FROM day_results WHERE user_id = ? AND day_date LIKE ? ORDER BY day_date"
+  ).all(userId, yearMonth + '%') as Array<{ day_date: string; met: number; mode: string; total: number }>;
+  return rows.map(r => ({ ...r, met: r.met === 1 }));
+}
+
+export function updateStreak(userId: number, last5: string, streak: number): void {
+  db.prepare("UPDATE users SET last5 = ?, streak = ? WHERE id = ?").run(last5, streak, userId);
+}
+
 export function getGroupName(inviteCode: string): string {
   const row = db.prepare("SELECT group_name FROM invite_codes WHERE code = ?").get(inviteCode) as { group_name: string } | null;
   return row?.group_name || inviteCode;
 }
 
-export function getDayHistory(userId: number, timezone: string, nextBoundaryUtc: string, days: number = 5): Array<{ met: boolean; mode: string }> {
-  const result: Array<{ met: boolean; mode: string }> = [];
-  const user = getUserById(userId);
-  if (!user) return result;
-
-  // Start from yesterday (skip today — still in progress)
-  let endBoundary = getPreviousDayBoundary(timezone, nextBoundaryUtc);
-  for (let i = 0; i < days; i++) {
-    const startBoundary = getPreviousDayBoundary(timezone, endBoundary);
-
-    // Skip days before user existed (normalize created_at to ISO for comparison)
-    const createdIso = user.created_at.includes('T') ? user.created_at : user.created_at.replace(' ', 'T') + 'Z';
-    if (createdIso > endBoundary) {
-      endBoundary = startBoundary;
-      continue;
-    }
-
-    const total = getTodayTotal(userId, startBoundary, endBoundary);
-    const met = user.daily_target > 0 && total >= user.daily_target;
-
-    let mode = 'manual';
-    if (met) {
-      const stdRow = db.prepare(
-        "SELECT COALESCE(SUM(count), 0) as total FROM pushup_logs WHERE user_id = ? AND logged_at >= ? AND logged_at < ? AND mode = 'standard'"
-      ).get(userId, startBoundary, endBoundary) as { total: number };
-      mode = stdRow.total >= user.daily_target ? 'standard' : 'noob';
-    }
-
-    result.push({ met, mode });
-    endBoundary = startBoundary;
-  }
-  return result;
-}
-
-export function getMonthHistory(userId: number, boundaries: Array<{ day: number; start: string; end: string }>): Array<{ day: number; met: boolean; mode: string }> {
-  const result: Array<{ day: number; met: boolean; mode: string }> = [];
-  const user = getUserById(userId);
-  if (!user) return result;
-
-  for (const { day, start, end } of boundaries) {
-    const createdIso = user.created_at.includes('T') ? user.created_at : user.created_at.replace(' ', 'T') + 'Z';
-    if (createdIso > end) continue;
-
-    const total = getTodayTotal(userId, start, end);
-    const met = user.daily_target > 0 && total >= user.daily_target;
-
-    let mode = 'manual';
-    if (met) {
-      const stdRow = db.prepare(
-        "SELECT COALESCE(SUM(count), 0) as total FROM pushup_logs WHERE user_id = ? AND logged_at >= ? AND logged_at < ? AND mode = 'standard'"
-      ).get(userId, start, end) as { total: number };
-      mode = stdRow.total >= user.daily_target ? 'standard' : 'noob';
-    }
-
-    result.push({ day, met, mode });
-  }
-  return result;
-}
 
 export function getUsersWithExpiredBoundary(now: string): User[] {
   return db.prepare("SELECT * FROM users WHERE next_day_boundary <= ?").all(now) as User[];
