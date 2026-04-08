@@ -227,7 +227,6 @@ async function renderCalendar(container, userData) {
       </div>
     `;
 
-    const created = new Date(userData.created_at ? userData.created_at.replace(' ', 'T') + 'Z' : now);
     const minYear = created.getFullYear();
     const minMonth = created.getMonth() + 1;
 
