@@ -178,6 +178,7 @@ export async function handleApiRequest(req: Request): Promise<Response> {
         today_total: todayTotal,
         debt: u.debt,
         last5days,
+        ever_logged: everLogged,
         streak: { count: streakCount, type: streakCount > 0 ? 'hot' : 'none' },
       };
     });
