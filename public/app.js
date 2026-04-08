@@ -346,7 +346,7 @@ function renderDashboard(app, data) {
           let display = `${m.today_total} / ${m.daily_target}`;
           if (m.daily_target > 0 && m.today_total >= m.daily_target) {
             statusClass = 'complete';
-            display = `${m.today_total} <i data-lucide="check" style="width:16px;height:16px;display:inline"></i>`;
+            display = `<i data-lucide="check" style="width:16px;height:16px;display:inline"></i> ${m.today_total} / ${m.daily_target}`;
           } else if (m.today_total > 0) {
             statusClass = 'in-progress';
           }
