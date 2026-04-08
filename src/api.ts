@@ -135,19 +135,6 @@ export async function handleApiRequest(req: Request): Promise<Response> {
     const logMode = source === 'manual' ? 'manual' : (mode === 'standard' ? 'standard' : 'noob');
     const log = logPushups(user.id, count, source, logMode);
 
-    // Check if surplus pushups should reduce debt
-    if (user.debt > 0 && user.daily_target > 0) {
-      const prevBoundary = getPreviousDayBoundary(user.timezone, user.next_day_boundary);
-      const todayTotal = getTodayTotal(user.id, prevBoundary, user.next_day_boundary);
-      const previousTotal = todayTotal - count;
-      // Only reduce debt by the NEW surplus from this specific log, not total surplus
-      const newSurplus = Math.max(0, todayTotal - user.daily_target) - Math.max(0, previousTotal - user.daily_target);
-      if (newSurplus > 0) {
-        const debtReduction = Math.min(newSurplus, user.debt);
-        updateDebt(user.id, -debtReduction);
-      }
-    }
-
     return json(log);
   }
 

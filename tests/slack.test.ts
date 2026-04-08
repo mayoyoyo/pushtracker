@@ -17,5 +17,15 @@ describe("slack", () => {
       const msg = formatDayResult("bob", "April 8, 2026", 20, 20, true, 1);
       expect(msg).toBe("📊 bob — April 8, 2026\n20/20 ✅ | 🔥 streak: 1");
     });
+
+    test("formats with debt shown", () => {
+      const msg = formatDayResult("alice", "April 8, 2026", 15, 20, false, 0, 40);
+      expect(msg).toBe("📊 alice — April 8, 2026\n15/20 ❌ | debt: 40 | streak: 0");
+    });
+
+    test("hides debt when zero", () => {
+      const msg = formatDayResult("bob", "April 8, 2026", 25, 20, true, 3, 0);
+      expect(msg).toBe("📊 bob — April 8, 2026\n25/20 ✅ | 🔥 streak: 3");
+    });
   });
 });

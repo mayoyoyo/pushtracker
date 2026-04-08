@@ -1,11 +1,12 @@
-export function formatDayResult(username: string, date: string, total: number, target: number, met: boolean, streak: number): string {
+export function formatDayResult(username: string, date: string, total: number, target: number, met: boolean, streak: number, debt: number = 0): string {
   const icon = met ? "✅" : "❌";
+  const debtPart = debt > 0 ? ` | debt: ${debt}` : "";
   const fire = streak >= 1 ? "🔥 " : "";
-  return `📊 ${username} — ${date}\n${total}/${target} ${icon} | ${fire}streak: ${streak}`;
+  return `📊 ${username} — ${date}\n${total}/${target} ${icon}${debtPart} | ${fire}streak: ${streak}`;
 }
 
-export async function postDayResult(token: string, channel: string, username: string, date: string, total: number, target: number, met: boolean, streak: number): Promise<void> {
-  const text = formatDayResult(username, date, total, target, met, streak);
+export async function postDayResult(token: string, channel: string, username: string, date: string, total: number, target: number, met: boolean, streak: number, debt: number = 0): Promise<void> {
+  const text = formatDayResult(username, date, total, target, met, streak, debt);
   const res = await fetch("https://slack.com/api/chat.postMessage", {
     method: "POST",
     headers: {

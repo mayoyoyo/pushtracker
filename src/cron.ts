@@ -1,4 +1,4 @@
-import { getUsersWithExpiredBoundary, getTodayTotal, getTodayLogs, updateDebt, updateNextDayBoundary, updateStreak, saveDayResult, getSlackConfig } from "./db";
+import { getUsersWithExpiredBoundary, getUserById, getTodayTotal, getTodayLogs, updateDebt, updateNextDayBoundary, updateStreak, saveDayResult, getSlackConfig } from "./db";
 import { advanceBoundary, getPreviousDayBoundary } from "./timezone";
 import { postDayResult } from "./slack";
 import { DateTime } from "luxon";
@@ -43,16 +43,23 @@ export function processExpiredBoundaries(nowUtc: string): void {
       const dayDate = DateTime.fromISO(prevBoundary, { zone: 'utc' }).setZone(user.timezone).toISODate();
       saveDayResult(user.id, dayDate, met, dayIcon === 'S' ? 'standard' : dayIcon === 'F' ? 'noob' : 'manual', todayTotal);
 
+      // Debt: add shortfall or reduce by surplus
+      if (shortfall > 0 && (userWasActive || dayFullyElapsed)) {
+        updateDebt(user.id, shortfall);
+      } else if (met && user.debt > 0) {
+        const surplus = todayTotal - user.daily_target;
+        if (surplus > 0) {
+          updateDebt(user.id, -Math.min(surplus, user.debt));
+        }
+      }
+
       // Post to Slack if team has it configured
       const slackConfig = getSlackConfig(user.invite_code);
       if (slackConfig) {
         const formattedDate = DateTime.fromISO(dayDate).toFormat("MMMM d, yyyy");
-        postDayResult(slackConfig.slack_bot_token, slackConfig.slack_channel, user.username, formattedDate, todayTotal, user.daily_target, met, newStreak)
+        const updatedUser = getUserById(user.id)!;
+        postDayResult(slackConfig.slack_bot_token, slackConfig.slack_channel, user.username, formattedDate, todayTotal, user.daily_target, met, newStreak, updatedUser.debt)
           .catch(err => console.error(`Slack post failed for ${user.username}:`, err));
-      }
-
-      if (shortfall > 0 && (userWasActive || dayFullyElapsed)) {
-        updateDebt(user.id, shortfall);
       }
 
       updateNextDayBoundary(user.id, nextBoundary);

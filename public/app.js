@@ -290,6 +290,9 @@ function renderDashboard(app, data) {
   function renderMeTab() {
     const pct = data.daily_target > 0 ? Math.min(100, (data.today_total / data.daily_target) * 100) : 0;
     const done = data.daily_target > 0 && data.today_total >= data.daily_target;
+    const surplus = Math.max(0, data.today_total - data.daily_target);
+    const debtCovered = data.debt > 0 ? Math.min(surplus, data.debt) : 0;
+    const debtFullyPaid = debtCovered > 0 && debtCovered >= data.debt;
 
     app.innerHTML = `
       ${tabHeader()}
@@ -310,6 +313,7 @@ function renderDashboard(app, data) {
         </div>
         <div class="progress-count" style="${done ? 'color:#22c55e' : ''}">${data.today_total} <span class="progress-target">/ ${data.daily_target}</span></div>
         <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;${done ? 'background:#22c55e' : ''}"></div></div>
+        ${data.debt > 0 ? `<div style="margin-top:8px;font-size:12px;color:${debtFullyPaid ? '#22c55e' : 'var(--text-muted)'}">${debtFullyPaid ? '✓' : ''} ${debtCovered}/${data.debt} debt covered</div>` : ''}
       </div>
       ${data.debt > 0 ? `
       <div class="debt-card">
@@ -383,8 +387,7 @@ function renderDashboard(app, data) {
             <div class="team-member">
               <div>
                 <div class="member-name">${m.username} <span style="font-size:14px;letter-spacing:1px">${streakIcons(m.last5days)}</span></div>
-                <div class="member-target">Target: ${m.daily_target} <span style="font-size:11px;color:var(--text-dim);margin-left:4px">${streakText(m.streak)}</span></div>
-                ${m.debt > 0 ? `<div class="member-debt">Debt: ${m.debt}</div>` : ''}
+                <div class="member-target">${streakText(m.streak)}${m.debt > 0 ? `<span style="font-size:11px;color:var(--danger);margin-left:${m.streak.count > 0 ? '4' : '0'}px">debt: ${m.debt}</span>` : ''}</div>
               </div>
               <div class="member-progress ${statusClass}">${display}</div>
             </div>`;

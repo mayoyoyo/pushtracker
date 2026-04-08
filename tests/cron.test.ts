@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, mock } from "bun:test";
-import { getDb, createUser, getUserById, logPushups, updateTarget } from "../src/db";
+import { getDb, createUser, getUserById, logPushups, updateTarget, updateDebt } from "../src/db";
 import { processExpiredBoundaries } from "../src/cron";
 
 describe("cron", () => {
@@ -50,6 +50,26 @@ describe("cron", () => {
     processExpiredBoundaries("2026-04-07T12:00:00Z");
     const updated = getUserById(user.id)!;
     expect(updated.debt).toBe(0);
+  });
+
+  test("reduces debt by surplus when user exceeds target", () => {
+    const user = createUser("debtuser", "hash", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
+    updateTarget(user.id, 20);
+    updateDebt(user.id, 30);
+    logPushups(user.id, 35, "camera", "standard", "2026-04-06T14:00:00Z");
+    processExpiredBoundaries("2026-04-07T12:00:00Z");
+    const updated = getUserById(user.id)!;
+    expect(updated.debt).toBe(15); // 30 - min(15 surplus, 30 debt) = 15
+  });
+
+  test("reduces debt fully when surplus exceeds debt", () => {
+    const user = createUser("debtuser2", "hash", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
+    updateTarget(user.id, 20);
+    updateDebt(user.id, 10);
+    logPushups(user.id, 50, "camera", "standard", "2026-04-06T14:00:00Z");
+    processExpiredBoundaries("2026-04-07T12:00:00Z");
+    const updated = getUserById(user.id)!;
+    expect(updated.debt).toBe(0); // 10 - min(30 surplus, 10 debt) = 0
   });
 
   test("calls Slack when team has slack config", () => {
