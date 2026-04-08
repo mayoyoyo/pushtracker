@@ -175,6 +175,11 @@ export function getGroupName(inviteCode: string): string {
 }
 
 
+export function hasEverLoggedPushups(userId: number): boolean {
+  const row = db.prepare("SELECT 1 FROM pushup_logs WHERE user_id = ? LIMIT 1").get(userId);
+  return row !== null;
+}
+
 export function getUsersWithExpiredBoundary(now: string): User[] {
   return db.prepare("SELECT * FROM users WHERE next_day_boundary <= ?").all(now) as User[];
 }

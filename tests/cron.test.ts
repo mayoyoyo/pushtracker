@@ -38,15 +38,28 @@ describe("cron", () => {
   test("handles multiple expired boundaries (user offline for days)", () => {
     const user = createUser("hanson", "hash", "America/New_York", "2026-04-05T11:00:00.000Z", "DEV0");
     updateTarget(user.id, 50);
+    // Must have logged at least once to accrue debt (before any boundary window)
+    logPushups(user.id, 1, "manual", "manual", "2026-03-01T14:00:00Z");
     processExpiredBoundaries("2026-04-08T12:00:00Z");
     const updated = getUserById(user.id)!;
-    expect(updated.debt).toBe(150);
+    expect(updated.debt).toBe(200); // 4 days * 50 = 200
     expect(updated.next_day_boundary).toBe("2026-04-09T11:00:00.000Z");
+  });
+
+  test("skips users who have never logged a pushup", () => {
+    const user = createUser("newbie", "hash", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
+    updateTarget(user.id, 20);
+    processExpiredBoundaries("2026-04-07T12:00:00Z");
+    const updated = getUserById(user.id)!;
+    expect(updated.debt).toBe(0);
+    expect(updated.last5).toBe("");
+    expect(updated.next_day_boundary).toBe("2026-04-08T11:00:00.000Z");
   });
 
   test("no debt when target is 0", () => {
     const user = createUser("hanson", "hash", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
     updateTarget(user.id, 0);
+    logPushups(user.id, 1, "manual", "manual", "2026-04-06T14:00:00Z");
     processExpiredBoundaries("2026-04-07T12:00:00Z");
     const updated = getUserById(user.id)!;
     expect(updated.debt).toBe(0);

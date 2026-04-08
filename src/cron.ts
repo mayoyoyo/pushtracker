@@ -1,4 +1,4 @@
-import { getUsersWithExpiredBoundary, getUserById, getTodayTotal, getTodayLogs, updateDebt, updateNextDayBoundary, updateStreak, saveDayResult, getSlackConfig } from "./db";
+import { getUsersWithExpiredBoundary, getUserById, getTodayTotal, getTodayLogs, updateDebt, updateNextDayBoundary, updateStreak, saveDayResult, getSlackConfig, hasEverLoggedPushups } from "./db";
 import { advanceBoundary, getPreviousDayBoundary } from "./timezone";
 import { postDayResult } from "./slack";
 import { DateTime } from "luxon";
@@ -10,12 +10,17 @@ export function processExpiredBoundaries(nowUtc: string): void {
 
   while (users.length > 0) {
     for (const user of users) {
+      const nextBoundary = advanceBoundary(user.timezone, user.next_day_boundary);
+
+      // Skip users who have never logged a pushup — no debt, no streak, no calendar
+      if (!hasEverLoggedPushups(user.id)) {
+        updateNextDayBoundary(user.id, nextBoundary);
+        continue;
+      }
+
       const prevBoundary = getPreviousDayBoundary(user.timezone, user.next_day_boundary);
       const todayTotal = getTodayTotal(user.id, prevBoundary, user.next_day_boundary);
       const shortfall = user.daily_target - todayTotal;
-      const nextBoundary = advanceBoundary(user.timezone, user.next_day_boundary);
-      const dayFullyElapsed = nextBoundary <= nowUtc;
-      const userWasActive = todayTotal > 0;
 
       // Update streak: S=standard, F=fire(noob/manual), I=ice(missed)
       const met = user.daily_target > 0 && todayTotal >= user.daily_target;
@@ -44,7 +49,7 @@ export function processExpiredBoundaries(nowUtc: string): void {
       saveDayResult(user.id, dayDate, met, dayIcon === 'S' ? 'standard' : dayIcon === 'F' ? 'noob' : 'manual', todayTotal);
 
       // Debt: add shortfall or reduce by surplus
-      if (shortfall > 0 && (userWasActive || dayFullyElapsed)) {
+      if (shortfall > 0) {
         updateDebt(user.id, shortfall);
       } else if (met && user.debt > 0) {
         const surplus = todayTotal - user.daily_target;
