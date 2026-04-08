@@ -200,7 +200,10 @@ async function renderCalendar(container, userData) {
       const afterCreation = cellDate >= new Date(created.getFullYear(), created.getMonth(), created.getDate());
       const entry = dayMap[d];
       let icon = '';
-      if (entry) {
+      if (isToday && userData.today_total >= userData.daily_target && userData.daily_target > 0) {
+        // Live today completion
+        icon = '🔥'; // Will be refined if we track mode, but fire is safe default
+      } else if (entry) {
         if (entry.met) {
           icon = entry.mode === 'standard' ? '<img src="/opm-fist.png" style="width:14px;height:14px">' : '🔥';
         } else {
@@ -513,7 +516,7 @@ function getModeContent(mode) {
       <div style="flex:1">
         <div style="display:flex;flex-direction:column;gap:12px;font-size:13px">
           <div style="display:flex;gap:8px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:16px">1</span><div><strong style="color:var(--text)">Phone to your side</strong><br><span style="color:var(--text-dim)">It needs to see your full profile</span></div></div>
-          <div style="display:flex;gap:8px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:16px">2</span><div><strong style="color:var(--text)">Full body in frame</strong><br><span style="color:var(--text-dim)">Head to feet, including ankles</span></div></div>
+          <div style="display:flex;gap:8px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:16px">2</span><div><strong style="color:var(--text)">Shoulder to ankle in frame</strong><br><span style="color:var(--text-dim)">Ankles must be visible — reps won't count without them</span></div></div>
           <div style="display:flex;gap:8px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:16px">3</span><div><strong style="color:var(--text)">Wait for the chime</strong><br><span style="color:var(--text-dim)">Green border means ready</span></div></div>
         </div>
       </div>
