@@ -476,6 +476,43 @@ function showSettings() {
 
 let cameraMode = 'noob'; // 'noob' or 'standard'
 
+function getModeContent(mode) {
+  if (mode === 'standard') return `
+    <div style="text-align:center;margin-bottom:16px">
+      <img src="/opm-fist.png" style="width:64px;height:64px">
+      <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Streak icon</div>
+    </div>
+    <div style="text-align:center;margin-bottom:16px">
+      <img src="/setup-opm.svg" style="width:100%;max-width:240px">
+    </div>
+    <div style="border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px">
+      <div style="font-weight:600;margin-bottom:12px;text-align:center">Setup in 3 steps:</div>
+      <div style="display:flex;flex-direction:column;gap:12px;font-size:14px">
+        <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:18px">1</span><span style="color:var(--text-dim)"><strong style="color:var(--text)">Phone to your side</strong> — prop it 1-2 feet off the ground</span></div>
+        <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:18px">2</span><span style="color:var(--text-dim)"><strong style="color:var(--text)">Full body in frame</strong> — head to feet, including ankles</span></div>
+        <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:18px">3</span><span style="color:var(--text-dim)"><strong style="color:var(--text)">Wait for the chime</strong> — green border = ready to go</span></div>
+      </div>
+    </div>
+    <p style="font-size:11px;color:var(--text-muted);line-height:1.5;padding:0 4px">One Punch Mode uses full-body tracking with stricter form requirements. Some reps may not count if ankles leave the frame or knee angle is too bent. Keep your full body visible for best results.</p>`;
+  return `
+    <div style="text-align:center;margin-bottom:16px">
+      <div style="font-size:48px">🔥</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Streak icon</div>
+    </div>
+    <div style="text-align:center;margin-bottom:16px">
+      <img src="/setup-noob.svg" style="width:100%;max-width:240px">
+    </div>
+    <div style="border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px">
+      <div style="font-weight:600;margin-bottom:12px;text-align:center">Setup in 3 steps:</div>
+      <div style="display:flex;flex-direction:column;gap:12px;font-size:14px">
+        <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:18px">1</span><span style="color:var(--text-dim)"><strong style="color:var(--text)">Face the camera</strong> — place phone on the floor in front of you</span></div>
+        <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:18px">2</span><span style="color:var(--text-dim)"><strong style="color:var(--text)">Show your face + shoulders</strong> — that's all it needs</span></div>
+        <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:18px">3</span><span style="color:var(--text-dim)"><strong style="color:var(--text)">Wait for the chime</strong> — green border = ready to go</span></div>
+      </div>
+    </div>
+    <p style="font-size:11px;color:var(--text-muted);line-height:1.5;padding:0 4px">Noob Mode only tracks your upper body — it can't tell if you're on your knees or doing full push-ups. Great for getting started, but it won't catch shortcuts.</p>`;
+}
+
 function showTutorial(onStart) {
   const app = document.getElementById('app');
   const isStd = cameraMode === 'standard';
@@ -491,41 +528,7 @@ function showTutorial(onStart) {
           </div>
         </div>
 
-        ${isStd ? `
-        <div style="text-align:center;margin-bottom:16px">
-          <img src="/opm-fist.png" style="width:64px;height:64px">
-          <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Streak icon</div>
-        </div>
-        <div style="text-align:center;margin-bottom:16px">
-          <img src="/setup-opm.svg" style="width:100%;max-width:240px">
-        </div>
-        <div style="border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:20px">
-          <div style="font-weight:600;margin-bottom:12px;text-align:center">Setup in 3 steps:</div>
-          <div style="display:flex;flex-direction:column;gap:12px;font-size:14px">
-            <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:18px">1</span><span style="color:var(--text-dim)"><strong style="color:var(--text)">Phone to your side</strong> — prop it 1-2 feet off the ground</span></div>
-            <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:18px">2</span><span style="color:var(--text-dim)"><strong style="color:var(--text)">Full body in frame</strong> — head to feet, including ankles</span></div>
-            <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:18px">3</span><span style="color:var(--text-dim)"><strong style="color:var(--text)">Wait for the chime</strong> — green border = ready to go</span></div>
-          </div>
-        </div>
-        <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin-bottom:20px;padding:0 4px">One Punch Mode uses full-body tracking with stricter form requirements. Some reps may not count if ankles leave the frame or knee angle is too bent. Keep your full body visible for best results.</p>
-        ` : `
-        <div style="text-align:center;margin-bottom:16px">
-          <div style="font-size:48px">🔥</div>
-          <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Streak icon</div>
-        </div>
-        <div style="text-align:center;margin-bottom:16px">
-          <img src="/setup-noob.svg" style="width:100%;max-width:240px">
-        </div>
-        <div style="border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:20px">
-          <div style="font-weight:600;margin-bottom:12px;text-align:center">Setup in 3 steps:</div>
-          <div style="display:flex;flex-direction:column;gap:12px;font-size:14px">
-            <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:18px">1</span><span style="color:var(--text-dim)"><strong style="color:var(--text)">Face the camera</strong> — place phone on the floor in front of you</span></div>
-            <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:18px">2</span><span style="color:var(--text-dim)"><strong style="color:var(--text)">Show your face + shoulders</strong> — that's all it needs</span></div>
-            <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:18px">3</span><span style="color:var(--text-dim)"><strong style="color:var(--text)">Wait for the chime</strong> — green border = ready to go</span></div>
-          </div>
-        </div>
-        <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin-bottom:20px;padding:0 4px">Noob Mode only tracks your upper body — it can't tell if you're on your knees or doing full push-ups. Great for getting started, but it won't catch shortcuts.</p>
-        `}
+        ${getModeContent(isStd ? 'standard' : 'noob')}
 
         <button class="btn btn-primary" style="width:100%" id="tut-start">Start Camera</button>
       </div>
@@ -744,8 +747,18 @@ async function renderCamera(app) {
     }
 
     document.getElementById('cam-help').addEventListener('click', () => {
-      stopCamera();
-      showTutorial(() => startCameraSession());
+      const helpOverlay = document.createElement('div');
+      helpOverlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:200;overflow-y:auto;display:flex;align-items:flex-start;justify-content:center';
+      helpOverlay.innerHTML = `
+        <div style="padding:24px 20px;max-width:400px;width:100%;position:relative;margin-top:20px">
+          <button id="help-close" style="position:absolute;top:0;right:0;background:none;border:none;color:var(--text-dim);cursor:pointer;padding:8px;font-size:20px">&times;</button>
+          <h2 style="text-align:center;margin-bottom:16px">${mode === 'standard' ? 'One Punch Mode' : 'Noob Mode'}</h2>
+          ${getModeContent(mode)}
+        </div>
+      `;
+      document.body.appendChild(helpOverlay);
+      helpOverlay.querySelector('#help-close').addEventListener('click', () => helpOverlay.remove());
+      helpOverlay.addEventListener('click', (e) => { if (e.target === helpOverlay) helpOverlay.remove(); });
     });
 
     initIcons();
