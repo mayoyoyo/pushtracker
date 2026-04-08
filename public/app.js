@@ -483,7 +483,7 @@ function getModeContent(mode) {
       <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Streak icon</div>
     </div>
     <div style="text-align:center;margin-bottom:16px">
-      <img src="/setup-opm.svg" style="width:100%;max-width:240px">
+      <img src="/setup-opm.png" style="width:160px;height:240px;object-fit:contain">
     </div>
     <div style="border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px">
       <div style="font-weight:600;margin-bottom:12px;text-align:center">Setup in 3 steps:</div>
@@ -500,7 +500,7 @@ function getModeContent(mode) {
       <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Streak icon</div>
     </div>
     <div style="text-align:center;margin-bottom:16px">
-      <img src="/setup-noob.svg" style="width:100%;max-width:240px">
+      <img src="/setup-noob.png" style="width:160px;height:240px;object-fit:contain">
     </div>
     <div style="border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px">
       <div style="font-weight:600;margin-bottom:12px;text-align:center">Setup in 3 steps:</div>
