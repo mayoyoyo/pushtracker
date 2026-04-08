@@ -1,5 +1,5 @@
 import { signup, login, logout, getSessionUser, parseSessionToken, sessionCookie, clearSessionCookie } from "./auth";
-import { logPushups, getTodayLogs, getTodayTotal, getTeamByGroup, updateTarget, updateDebt, updateTimezone, getGroupName, getMonthResults, type User } from "./db";
+import { logPushups, getTodayLogs, getTodayTotal, getTeamByGroup, updateTarget, updateDebt, updateTimezone, getGroupName, getMonthResults, hasEverLoggedPushups, type User } from "./db";
 import { getNextDayBoundary, getPreviousDayBoundary } from "./timezone";
 import { processExpiredBoundaries } from "./cron";
 
@@ -80,8 +80,9 @@ export async function handleApiRequest(req: Request): Promise<Response> {
         .reduce((sum: number, l: any) => sum + l.count, 0);
       todayIcon = stdTotal >= user.daily_target ? 'S' : 'F';
     }
+    const everLogged = hasEverLoggedPushups(user.id);
     const pastIcons = user.last5 ? user.last5.split(',') : [];
-    const allIcons = [...pastIcons, todayIcon].slice(-5);
+    const allIcons = everLogged ? [...pastIcons, todayIcon].slice(-5) : [];
     const last5days = allIcons.map(i => ({ met: i === 'S' || i === 'F', mode: i === 'S' ? 'standard' : i === 'F' ? 'noob' : 'manual' }));
 
     // Streak: user.streak is from completed days, add 1 if today is met and streak was going
@@ -159,8 +160,9 @@ export async function handleApiRequest(req: Request): Promise<Response> {
           .reduce((sum: number, l: any) => sum + l.count, 0);
         todayIcon = stdTotal >= u.daily_target ? 'S' : 'F';
       }
+      const everLogged = hasEverLoggedPushups(u.id);
       const pastIcons = u.last5 ? u.last5.split(',') : [];
-      const allIcons = [...pastIcons, todayIcon].slice(-5);
+      const allIcons = everLogged ? [...pastIcons, todayIcon].slice(-5) : [];
       const last5days = allIcons.map((i: string) => ({ met: i === 'S' || i === 'F', mode: i === 'S' ? 'standard' : i === 'F' ? 'noob' : 'manual' }));
 
       let streakCount = u.streak;
