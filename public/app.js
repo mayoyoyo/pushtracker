@@ -49,7 +49,7 @@ function streakIcons(last5days) {
   if (!last5days || !last5days.length) return '';
   return last5days.map(d => {
     if (!d.met) return '🧊';
-    return d.mode === 'standard' ? '<img src="/opm-fist.png" style="width:16px;height:16px;vertical-align:middle">' : '🔥';
+    return d.mode === 'standard' ? '<img src="/opm-fist.png" style="width:22px;height:22px;vertical-align:middle">' : '🔥';
   }).join('');
 }
 
