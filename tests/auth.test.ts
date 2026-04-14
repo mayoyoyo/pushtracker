@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from "bun:test";
-import { getDb } from "../src/db";
+import { getDb, linkAlias, updateTarget, updateDebt } from "../src/db";
 import { signup, login, getSessionUser, logout } from "../src/auth";
 
 describe("auth", () => {
@@ -55,6 +55,21 @@ describe("auth", () => {
 
     test("returns null for invalid token", () => {
       expect(getSessionUser("invalid-token")).toBeNull();
+    });
+
+    test("getSessionUser on alias session returns source's progress/settings", async () => {
+      const { user: hanson } = await signup("hanson", "1111", "America/New_York", "DEV0");
+      const { token, user: mayo } = await signup("mayo", "2222", "America/New_York", "FRST");
+      linkAlias(mayo.id, hanson.id);
+      updateTarget(hanson.id, 45);
+      updateDebt(hanson.id, 12);
+
+      const resolved = getSessionUser(token)!;
+      expect(resolved.id).toBe(mayo.id);
+      expect(resolved.username).toBe("mayo");
+      expect(resolved.invite_code).toBe("FRST");
+      expect(resolved.daily_target).toBe(45);
+      expect(resolved.debt).toBe(12);
     });
   });
 

@@ -1,4 +1,4 @@
-import { createUser, getUserByUsername, getUserById, createSession, getSession, deleteSession, validateInviteCode, type User } from "./db";
+import { createUser, getUserByUsername, getResolvedUserById, createSession, getSession, deleteSession, validateInviteCode, type User } from "./db";
 import { getNextDayBoundary } from "./timezone";
 
 export async function signup(username: string, passcode: string, timezone: string, inviteCode: string): Promise<{ user: User; token: string }> {
@@ -36,7 +36,7 @@ export async function login(username: string, passcode: string): Promise<{ user:
 export function getSessionUser(token: string): User | null {
   const session = getSession(token);
   if (!session) return null;
-  return getUserById(session.user_id);
+  return getResolvedUserById(session.user_id);
 }
 
 export function logout(token: string): void {
