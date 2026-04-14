@@ -159,6 +159,14 @@ describe("cron", () => {
     const blob = JSON.stringify(calls[0].body);
     expect(blob).toContain("mayo");
     expect(blob).not.toContain("\"hanson\"");
+
+    // Regression guard for C1: the alias Slack post must use the day that just
+    // ended (April 6), not the day the source advanced into (April 7), and must
+    // reflect the source's actual rollup stats (60/50 ✅).
+    expect(blob).toContain("April 6");
+    expect(blob).not.toContain("April 7");
+    expect(blob).toContain("60/50");
+    expect(blob).toContain("✅");
   });
 
   test("does not call Slack when team has no slack config", () => {

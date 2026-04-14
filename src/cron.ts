@@ -16,31 +16,41 @@ export function processExpiredBoundaries(nowUtc: string): void {
       return aIsAlias - bIsAlias;
     });
 
+    // Captures each source's pre-advance rollup results for this iteration.
+    // Alias rows read from this map so their Slack post reflects the day that
+    // just ended, not the day the source just advanced into.
+    const sourceRollup = new Map<number, {
+      todayTotal: number;
+      met: boolean;
+      newStreak: number;
+      newDebt: number;
+      dayDate: string;
+    }>();
+
     for (const user of users) {
       if (user.source_user_id != null) {
-        // Alias branch: no rollup, no boundary advance — just fan out the org's Slack post.
+        // Alias branch: no rollup, no boundary advance — just fan out the org's Slack post
+        // using the source's rollup results captured earlier in this iteration.
         const slackConfig = getSlackConfig(user.invite_code);
         if (!slackConfig) continue;
 
+        const result = sourceRollup.get(user.source_user_id);
+        if (!result) continue; // Source wasn't rolled up this iteration (e.g. never-logged source).
+
         const resolved = getResolvedUserById(user.id);
         if (!resolved) continue;
-        if (!hasEverLoggedPushups(resolved.id)) continue;
 
-        const prevBoundary = getPreviousDayBoundary(resolved.timezone, resolved.next_day_boundary);
-        const todayTotal = getTodayTotal(resolved.id, prevBoundary, resolved.next_day_boundary);
-        const met = resolved.daily_target > 0 && todayTotal >= resolved.daily_target;
-        const dayDate = DateTime.fromISO(prevBoundary, { zone: 'utc' }).setZone(resolved.timezone).toISODate();
-        const formattedDate = DateTime.fromISO(dayDate!).toFormat("MMMM d, yyyy");
+        const formattedDate = DateTime.fromISO(result.dayDate).toFormat("MMMM d, yyyy");
         postDayResult(
           slackConfig.slack_bot_token,
           slackConfig.slack_channel,
           user.username,
           formattedDate,
-          todayTotal,
+          result.todayTotal,
           resolved.daily_target,
-          met,
-          resolved.streak,
-          resolved.debt,
+          result.met,
+          result.newStreak,
+          result.newDebt,
         ).catch(err => console.error(`Slack post failed for ${user.username}:`, err));
         continue;
       }
@@ -94,11 +104,20 @@ export function processExpiredBoundaries(nowUtc: string): void {
         }
       }
 
+      // Capture pre-advance rollup results for any alias rows that fire their Slack post this iteration.
+      const updatedUser = getUserById(user.id)!;
+      sourceRollup.set(user.id, {
+        todayTotal,
+        met,
+        newStreak,
+        newDebt: updatedUser.debt,
+        dayDate: dayDate!,
+      });
+
       // Post to Slack if team has it configured
       const slackConfig = getSlackConfig(user.invite_code);
       if (slackConfig) {
         const formattedDate = DateTime.fromISO(dayDate!).toFormat("MMMM d, yyyy");
-        const updatedUser = getUserById(user.id)!;
         postDayResult(slackConfig.slack_bot_token, slackConfig.slack_channel, user.username, formattedDate, todayTotal, user.daily_target, met, newStreak, updatedUser.debt)
           .catch(err => console.error(`Slack post failed for ${user.username}:`, err));
       }
