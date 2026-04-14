@@ -174,9 +174,26 @@ async function loadDashboard() {
 }
 
 async function renderCalendar(container, userData) {
-  const now = new Date();
-  let year = now.getFullYear();
-  let month = now.getMonth() + 1;
+  // "pushup today" = the civil date (in the user's timezone) that the cron will
+  // write as day_date for the current 7am-to-7am window. Using browser civil
+  // today here would mislabel work done between midnight and the boundary hour:
+  // the in-progress win would show on tomorrow's cell while yesterday shows
+  // fail, because day_results hasn't been written yet and the fallback is 🧊.
+  // Mirrors src/cron.ts: day_date = prevBoundary → user timezone → ISO date.
+  const pushupToday = (() => {
+    if (!userData.next_day_boundary || !userData.timezone) {
+      const fallback = new Date();
+      return { year: fallback.getFullYear(), month: fallback.getMonth() + 1, day: fallback.getDate() };
+    }
+    const nextBoundary = new Date(userData.next_day_boundary);
+    const prevBoundary = new Date(nextBoundary.getTime() - 86400000);
+    const iso = prevBoundary.toLocaleDateString('en-CA', { timeZone: userData.timezone });
+    const [y, m, d] = iso.split('-').map(Number);
+    return { year: y, month: m, day: d };
+  })();
+
+  let year = pushupToday.year;
+  let month = pushupToday.month;
 
   async function render() {
     const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -186,17 +203,18 @@ async function renderCalendar(container, userData) {
 
     const firstDay = new Date(year, month - 1, 1).getDay();
     const daysInMonth = new Date(year, month, 0).getDate();
-    const today = now.getDate();
-    const isCurrentMonth = year === now.getFullYear() && month === now.getMonth() + 1;
+    const today = pushupToday.day;
+    const isCurrentMonth = year === pushupToday.year && month === pushupToday.month;
 
     let gridHtml = '';
     // Empty cells for offset
     for (let i = 0; i < firstDay; i++) gridHtml += '<div class="cal-cell"></div>';
-    const created = userData.created_at ? new Date(userData.created_at.replace(' ', 'T') + 'Z') : now;
+    const created = userData.created_at ? new Date(userData.created_at.replace(' ', 'T') + 'Z') : new Date();
+    const pushupTodayDate = new Date(pushupToday.year, pushupToday.month - 1, pushupToday.day);
     for (let d = 1; d <= daysInMonth; d++) {
       const isToday = isCurrentMonth && d === today;
       const cellDate = new Date(year, month - 1, d);
-      const isPast = cellDate < new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const isPast = cellDate < pushupTodayDate;
       const afterCreation = cellDate >= new Date(created.getFullYear(), created.getMonth(), created.getDate());
       const entry = dayMap[d];
       let icon = '';
@@ -244,7 +262,7 @@ async function renderCalendar(container, userData) {
     container.querySelector('#cal-next').addEventListener('click', () => {
       let nextM = month + 1, nextY = year;
       if (nextM > 12) { nextM = 1; nextY++; }
-      if (nextY > now.getFullYear() || (nextY === now.getFullYear() && nextM > now.getMonth() + 1)) return;
+      if (nextY > pushupToday.year || (nextY === pushupToday.year && nextM > pushupToday.month)) return;
       month = nextM; year = nextY;
       render();
     });
