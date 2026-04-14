@@ -1,4 +1,5 @@
 import { FilesetResolver, PoseLandmarker, DrawingUtils } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.34/vision_bundle.mjs';
+import { computeAbdomenAngle, abdomenAgreementDelta } from './tracker-helpers.js';
 
 let poseLandmarker = null;
 let animationFrameId = null;
@@ -443,9 +444,224 @@ function startStandardTracking(video, canvas, onCount, onDebug) {
 }
 
 // ============================================================
+// SITUP MODE — Side view, shoulder-hip-knee abdomen angle
+// ============================================================
+function startSitupTracking(video, canvas, onCount, onDebug) {
+  const ctx = canvas.getContext('2d');
+  let count = 0, tracking = false, frameNum = 0;
+  const angleBuf = [];
+
+  // Thresholds
+  const MIN_DIP_DEG = 50;            // minimum (baseline - peak) in degrees to commit a rep
+  const MIN_FRAMES = 10;             // frames between descend-start and commit check
+  const MAX_KNEE_DELTA = 15;         // legs must stay still (degrees)
+  const MAX_AGREEMENT_DELTA = 20;    // left/right abdomen angle disagreement cap (degrees)
+  const ASCEND_TIMEOUT_FRAMES = 120; // situps are slower than pushups; extra headroom
+  const READY_FRAMES_NEEDED = 30;
+  const LOST_FRAMES_THRESHOLD = 30;
+
+  // Ready gate state
+  let gateState = 'NOT_READY'; // NOT_READY | READY
+  let gateFrames = 0;
+  let lostFrames = 0;
+
+  // Tracking state
+  let phase = 'READY'; // READY | DESCENDING | ASCENDING
+  let baselineAngle = 0;    // adapted slowly in READY phase
+  let peakAngle = 0;        // running minimum angle during the current rep (peak of the sit-up)
+  let descentStartFrame = 0;
+  let startKneeAngle = null;
+  let kneeDeltaMax = 0;
+  let agreementMax = 0;
+
+  const eventLog = [];
+  function log(type, data) { eventLog.push({ t: (performance.now()/1000).toFixed(2), frame: frameNum, type, ...data }); if (eventLog.length > 200) eventLog.shift(); }
+
+  function landmarksVisible(lm) {
+    return lm[11].visibility > MIN_VISIBILITY
+      && lm[12].visibility > MIN_VISIBILITY
+      && lm[23].visibility > MIN_VISIBILITY
+      && lm[24].visibility > MIN_VISIBILITY
+      && lm[25].visibility > MIN_VISIBILITY
+      && lm[26].visibility > MIN_VISIBILITY;
+  }
+
+  function avgKneeAngle(lm) {
+    // Needs ankles — return null if any ankle is low-visibility.
+    if (lm[27].visibility < MIN_VISIBILITY || lm[28].visibility < MIN_VISIBILITY) return null;
+    const left = calculateAngle(lm[23], lm[25], lm[27]);
+    const right = calculateAngle(lm[24], lm[26], lm[28]);
+    return (left + right) / 2;
+  }
+
+  function processFrame() {
+    if (!poseLandmarker || video.paused || video.ended) { animationFrameId = requestAnimationFrame(processFrame); return; }
+    frameNum++;
+    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+    const result = poseLandmarker.detectForVideo(video, performance.now());
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (!result.landmarks || result.landmarks.length === 0) {
+      tracking = false;
+      if (gateState === 'READY') {
+        lostFrames++;
+        if (lostFrames >= LOST_FRAMES_THRESHOLD) {
+          gateState = 'NOT_READY';
+          gateFrames = 0;
+          phase = 'READY';
+          angleBuf.length = 0;
+          playTone(330, 0.3);
+          log('PAUSED', { reason: 'landmarks-lost' });
+        }
+      }
+      if (onDebug) onDebug({ phase, count, gated: gateState === 'READY' ? 'pausing' : 'no-pose', mode: 'SITUP' });
+      animationFrameId = requestAnimationFrame(processFrame);
+      return;
+    }
+
+    const lm = result.landmarks[0];
+    tracking = true;
+    drawSkeleton(ctx, lm);
+
+    // --- READY GATE ---
+    if (gateState === 'NOT_READY') {
+      if (landmarksVisible(lm)) gateFrames++;
+      else gateFrames = 0;
+
+      const missing = [];
+      if (lm[11].visibility <= MIN_VISIBILITY || lm[12].visibility <= MIN_VISIBILITY) missing.push('shoulder');
+      if (lm[23].visibility <= MIN_VISIBILITY || lm[24].visibility <= MIN_VISIBILITY) missing.push('hip');
+      if (lm[25].visibility <= MIN_VISIBILITY || lm[26].visibility <= MIN_VISIBILITY) missing.push('knee');
+
+      if (onDebug) onDebug({ gateProgress: `${gateFrames}/${READY_FRAMES_NEEDED}`, missing: missing.join(',') || 'none', phase: 'SETUP', count, gated: 'not-ready', mode: 'SITUP' });
+
+      if (gateFrames >= READY_FRAMES_NEEDED) {
+        gateState = 'READY';
+        lostFrames = 0;
+        const initialAngle = computeAbdomenAngle(lm);
+        baselineAngle = initialAngle;
+        peakAngle = initialAngle;
+        angleBuf.length = 0;
+        phase = 'READY';
+        playTone(880, 0.15);
+        setTimeout(() => playTone(1100, 0.15), 170);
+        log('READY', { angle: initialAngle.toFixed(1) });
+      }
+      animationFrameId = requestAnimationFrame(processFrame);
+      return;
+    }
+
+    // --- TRACKING (gate is READY) ---
+    if (!landmarksVisible(lm)) {
+      lostFrames++;
+      if (lostFrames >= LOST_FRAMES_THRESHOLD) {
+        gateState = 'NOT_READY';
+        gateFrames = 0;
+        phase = 'READY';
+        angleBuf.length = 0;
+        playTone(330, 0.3);
+        log('PAUSED', { reason: 'landmarks-lost' });
+      }
+      if (onDebug) onDebug({ phase, count, gated: 'losing-landmarks', mode: 'SITUP' });
+      animationFrameId = requestAnimationFrame(processFrame);
+      return;
+    }
+
+    lostFrames = 0;
+
+    const smoothedAngle = smoothValue(angleBuf, computeAbdomenAngle(lm));
+    const dipDeg = baselineAngle - smoothedAngle;   // positive when user is sitting up
+
+    // Track knee-delta and agreement during the rep (not in READY)
+    if (phase === 'DESCENDING' || phase === 'ASCENDING') {
+      const kAvg = avgKneeAngle(lm);
+      if (startKneeAngle !== null && kAvg !== null) {
+        const delta = Math.abs(kAvg - startKneeAngle);
+        if (delta > kneeDeltaMax) kneeDeltaMax = delta;
+      }
+      const agreement = abdomenAgreementDelta(lm);
+      if (agreement > agreementMax) agreementMax = agreement;
+    }
+
+    if (onDebug) onDebug({
+      abdomenAngle: smoothedAngle.toFixed(1),
+      dipDeg: dipDeg.toFixed(1),
+      baseline: baselineAngle.toFixed(1),
+      kneeDelta: phase !== 'READY' ? kneeDeltaMax.toFixed(1) : '--',
+      agreement: phase !== 'READY' ? agreementMax.toFixed(1) : '--',
+      phase, count, gated: 'active', mode: 'SITUP',
+      depth: Math.min(1, Math.max(0, dipDeg / (MIN_DIP_DEG * 1.5))),
+      depthThreshold: 1 / 1.5,
+    });
+
+    // --- PHASE MACHINE ---
+    if (phase === 'READY') {
+      // Adapt baseline slowly toward current angle
+      baselineAngle = smoothedAngle * 0.05 + baselineAngle * 0.95;
+      if (dipDeg > MIN_DIP_DEG * 0.5) {
+        phase = 'DESCENDING';
+        descentStartFrame = frameNum;
+        peakAngle = smoothedAngle;
+        const kAvg = avgKneeAngle(lm);
+        startKneeAngle = kAvg;
+        kneeDeltaMax = 0;
+        agreementMax = 0;
+        log('DESCEND', { angle: smoothedAngle.toFixed(1), baseline: baselineAngle.toFixed(1), startKnee: kAvg !== null ? Math.round(kAvg) : '--' });
+      }
+    }
+
+    if (phase === 'DESCENDING') {
+      if (smoothedAngle < peakAngle) peakAngle = smoothedAngle;
+      const totalDip = baselineAngle - peakAngle;
+      const returnAmt = smoothedAngle - peakAngle;
+
+      if (returnAmt > totalDip * 0.3 && totalDip > MIN_DIP_DEG) {
+        const frames = frameNum - descentStartFrame;
+
+        let reason = null;
+        if (frames < MIN_FRAMES) reason = 'too-fast';
+        else if (kneeDeltaMax > MAX_KNEE_DELTA) reason = 'knee-moved';
+        else if (agreementMax > MAX_AGREEMENT_DELTA) reason = 'left-right-disagree';
+
+        if (reason) {
+          log('REJECT', { reason, frames, totalDip: totalDip.toFixed(1), kneeDelta: kneeDeltaMax.toFixed(1), agreement: agreementMax.toFixed(1) });
+          phase = 'READY'; baselineAngle = smoothedAngle; peakAngle = smoothedAngle;
+          startKneeAngle = null; kneeDeltaMax = 0; agreementMax = 0;
+        } else {
+          phase = 'ASCENDING';
+          log('ASCEND', { totalDip: totalDip.toFixed(1), kneeDelta: kneeDeltaMax.toFixed(1), agreement: agreementMax.toFixed(1) });
+        }
+      }
+    }
+
+    if (phase === 'ASCENDING') {
+      if (smoothedAngle < peakAngle) peakAngle = smoothedAngle;
+      const totalDip = baselineAngle - peakAngle;
+      const returnAmt = smoothedAngle - peakAngle;
+      const ascendFrames = frameNum - descentStartFrame;
+      if (returnAmt > totalDip * 0.4) {
+        count++; onCount(count); playTone(660, 0.1);
+        log('COUNT', { n: count, totalDip: totalDip.toFixed(1) });
+        phase = 'READY'; baselineAngle = smoothedAngle; peakAngle = smoothedAngle;
+        startKneeAngle = null; kneeDeltaMax = 0; agreementMax = 0;
+      } else if (ascendFrames > ASCEND_TIMEOUT_FRAMES) {
+        log('REJECT', { reason: 'ascend-timeout', frames: ascendFrames, totalDip: totalDip.toFixed(1), returnPct: (returnAmt / totalDip).toFixed(2) });
+        phase = 'READY'; baselineAngle = smoothedAngle; peakAngle = smoothedAngle;
+        startKneeAngle = null; kneeDeltaMax = 0; agreementMax = 0;
+      }
+    }
+
+    animationFrameId = requestAnimationFrame(processFrame);
+  }
+  animationFrameId = requestAnimationFrame(processFrame);
+  return { getCount: () => count, isTracking: () => tracking, getLog: () => eventLog, stop: () => { if (animationFrameId) cancelAnimationFrame(animationFrameId); animationFrameId = null; } };
+}
+
+// ============================================================
 // Public API
 // ============================================================
 export function startTracking(video, canvas, onCount, onDebug, mode = 'noob') {
+  if (mode === 'situp') return startSitupTracking(video, canvas, onCount, onDebug);
   if (mode === 'standard') return startStandardTracking(video, canvas, onCount, onDebug);
   return startNoobTracking(video, canvas, onCount, onDebug);
 }

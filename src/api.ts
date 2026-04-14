@@ -137,7 +137,11 @@ export async function handleApiRequest(req: Request): Promise<Response> {
     if (source !== "camera" && source !== "manual") {
       return json({ error: "Source must be 'camera' or 'manual'" }, 400);
     }
-    const logMode = source === 'manual' ? 'manual' : (mode === 'standard' ? 'standard' : 'noob');
+    const logMode = source === 'manual'
+      ? 'manual'
+      : mode === 'standard' ? 'standard'
+      : mode === 'situp' ? 'situp'
+      : 'noob';
     const log = logPushups(user.id, count, source, logMode);
 
     return json(log);
