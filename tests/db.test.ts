@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from "bun:test";
-import { getDb, createUser, getUserByUsername, getUserById, logPushups, getTodayLogs, getTodayTotal, getMonthResults, hasEverLoggedPushups, getTeamByGroup, updateTarget, updateDebt, getGroupName, getSlackConfig, resolveDataUserId, linkAlias, saveDayResult, updateStreak, updateTimezone, getResolvedUserById, getResolvedTeamByGroup, getUsersWithExpiredBoundary, linkMayoToHansonIfNeeded } from "../src/db";
+import { getDb, createUser, getUserByUsername, getUserById, logPushups, getTodayLogs, getTodayTotal, getMonthResults, hasEverLoggedPushups, getTeamByGroup, updateTarget, updateDebt, getGroupName, getSlackConfig, getDiscordConfig, resolveDataUserId, linkAlias, saveDayResult, updateStreak, updateTimezone, getResolvedUserById, getResolvedTeamByGroup, getUsersWithExpiredBoundary, linkMayoToHansonIfNeeded } from "../src/db";
 
 describe("database", () => {
   beforeEach(() => {
@@ -142,6 +142,26 @@ describe("database", () => {
       const db = getDb(":memory:");
       db.prepare("UPDATE invite_codes SET slack_bot_token = 'xoxb-test' WHERE code = 'DEV0'").run();
       expect(getSlackConfig("DEV0")).toBeNull();
+    });
+  });
+
+  describe("getDiscordConfig", () => {
+    test("returns null when no discord config set", () => {
+      expect(getDiscordConfig("DEV0")).toBeNull();
+    });
+
+    test("returns config when webhook url is set", () => {
+      const db = getDb(":memory:");
+      db.prepare("UPDATE invite_codes SET discord_webhook_url = 'https://discord.com/api/webhooks/123/abc' WHERE code = 'DEV0'").run();
+      expect(getDiscordConfig("DEV0")).toEqual({
+        discord_webhook_url: "https://discord.com/api/webhooks/123/abc",
+      });
+    });
+
+    test("returns null when webhook url is empty string", () => {
+      const db = getDb(":memory:");
+      db.prepare("UPDATE invite_codes SET discord_webhook_url = '' WHERE code = 'DEV0'").run();
+      expect(getDiscordConfig("DEV0")).toBeNull();
     });
   });
 
