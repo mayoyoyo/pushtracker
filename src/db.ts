@@ -228,3 +228,50 @@ export function getSession(token: string): { token: string; user_id: number; exp
 export function deleteSession(token: string): void {
   db.prepare("DELETE FROM sessions WHERE token = ?").run(token);
 }
+
+export function getResolvedUserById(id: number): User | null {
+  const row = db.prepare("SELECT * FROM users WHERE id = ?").get(id) as User | null;
+  if (!row) return null;
+  if (row.source_user_id == null) return row;
+  const source = db.prepare("SELECT * FROM users WHERE id = ?").get(row.source_user_id) as User | null;
+  if (!source) return row;
+  return {
+    // identity from alias
+    id: row.id,
+    username: row.username,
+    passcode: row.passcode,
+    invite_code: row.invite_code,
+    created_at: row.created_at,
+    source_user_id: row.source_user_id,
+    // progress/settings from source
+    daily_target: source.daily_target,
+    debt: source.debt,
+    timezone: source.timezone,
+    next_day_boundary: source.next_day_boundary,
+    last5: source.last5,
+    streak: source.streak,
+  };
+}
+
+export function getResolvedTeamByGroup(inviteCode: string): User[] {
+  const rows = db.prepare("SELECT * FROM users WHERE invite_code = ? ORDER BY username").all(inviteCode) as User[];
+  return rows.map(row => {
+    if (row.source_user_id == null) return row;
+    const source = db.prepare("SELECT * FROM users WHERE id = ?").get(row.source_user_id) as User | null;
+    if (!source) return row;
+    return {
+      id: row.id,
+      username: row.username,
+      passcode: row.passcode,
+      invite_code: row.invite_code,
+      created_at: row.created_at,
+      source_user_id: row.source_user_id,
+      daily_target: source.daily_target,
+      debt: source.debt,
+      timezone: source.timezone,
+      next_day_boundary: source.next_day_boundary,
+      last5: source.last5,
+      streak: source.streak,
+    };
+  });
+}

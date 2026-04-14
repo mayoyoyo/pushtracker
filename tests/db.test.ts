@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from "bun:test";
-import { getDb, createUser, getUserByUsername, getUserById, logPushups, getTodayLogs, getTodayTotal, getMonthResults, hasEverLoggedPushups, getTeamByGroup, updateTarget, updateDebt, getGroupName, getSlackConfig, resolveDataUserId, linkAlias, saveDayResult, updateStreak, updateTimezone } from "../src/db";
+import { getDb, createUser, getUserByUsername, getUserById, logPushups, getTodayLogs, getTodayTotal, getMonthResults, hasEverLoggedPushups, getTeamByGroup, updateTarget, updateDebt, getGroupName, getSlackConfig, resolveDataUserId, linkAlias, saveDayResult, updateStreak, updateTimezone, getResolvedUserById, getResolvedTeamByGroup } from "../src/db";
 
 describe("database", () => {
   beforeEach(() => {
@@ -262,6 +262,79 @@ describe("database", () => {
       expect(h.timezone).toBe("Europe/London");
       expect(h.next_day_boundary).toBe("2026-04-09T00:00:00.000Z");
       expect(m.timezone).toBe("America/New_York");
+    });
+  });
+
+  describe("getResolvedUserById", () => {
+    test("returns row unchanged for non-alias user", () => {
+      const hanson = createUser("hanson", "h", "America/New_York", "2026-04-08T11:00:00Z", "DEV0");
+      updateTarget(hanson.id, 35);
+      const resolved = getResolvedUserById(hanson.id)!;
+      expect(resolved.id).toBe(hanson.id);
+      expect(resolved.username).toBe("hanson");
+      expect(resolved.daily_target).toBe(35);
+      expect(resolved.source_user_id).toBeNull();
+    });
+
+    test("merges alias identity with source progress/settings", () => {
+      const hanson = createUser("hanson", "h", "America/New_York", "2026-04-08T11:00:00Z", "DEV0");
+      const mayo = createUser("mayo", "h", "America/New_York", "2026-04-08T11:00:00Z", "FRST");
+      linkAlias(mayo.id, hanson.id);
+
+      updateTarget(hanson.id, 50);
+      updateDebt(hanson.id, 10);
+      updateStreak(hanson.id, "S,S", 2);
+
+      const resolved = getResolvedUserById(mayo.id)!;
+      expect(resolved.id).toBe(mayo.id);
+      expect(resolved.username).toBe("mayo");
+      expect(resolved.invite_code).toBe("FRST");
+      expect(resolved.daily_target).toBe(50);
+      expect(resolved.debt).toBe(10);
+      expect(resolved.last5).toBe("S,S");
+      expect(resolved.streak).toBe(2);
+      expect(resolved.source_user_id).toBe(hanson.id);
+    });
+
+    test("returns null for unknown id", () => {
+      expect(getResolvedUserById(9999)).toBeNull();
+    });
+  });
+
+  describe("getResolvedTeamByGroup", () => {
+    test("returns Frist org with mayo carrying hanson's progress", () => {
+      const hanson = createUser("hanson", "h", "America/New_York", "2026-04-08T11:00:00Z", "DEV0");
+      const mayo = createUser("mayo", "h", "America/New_York", "2026-04-08T11:00:00Z", "FRST");
+      const otherFrist = createUser("other", "h", "America/New_York", "2026-04-08T11:00:00Z", "FRST");
+      linkAlias(mayo.id, hanson.id);
+
+      updateTarget(hanson.id, 40);
+      updateDebt(hanson.id, 15);
+      updateStreak(hanson.id, "S,F", 2);
+
+      const frist = getResolvedTeamByGroup("FRST");
+      expect(frist.length).toBe(2);
+
+      const mayoRow = frist.find(u => u.username === "mayo")!;
+      expect(mayoRow.id).toBe(mayo.id);
+      expect(mayoRow.invite_code).toBe("FRST");
+      expect(mayoRow.daily_target).toBe(40);
+      expect(mayoRow.debt).toBe(15);
+      expect(mayoRow.streak).toBe(2);
+      expect(mayoRow.last5).toBe("S,F");
+
+      const otherRow = frist.find(u => u.username === "other")!;
+      expect(otherRow.daily_target).toBe(20);
+      expect(otherRow.debt).toBe(0);
+    });
+
+    test("MayoLab org shows hanson normally (non-alias)", () => {
+      const hanson = createUser("hanson", "h", "America/New_York", "2026-04-08T11:00:00Z", "DEV0");
+      updateTarget(hanson.id, 25);
+      const mayolab = getResolvedTeamByGroup("DEV0");
+      expect(mayolab.length).toBe(1);
+      expect(mayolab[0].username).toBe("hanson");
+      expect(mayolab[0].daily_target).toBe(25);
     });
   });
 });
