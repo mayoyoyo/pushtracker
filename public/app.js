@@ -276,6 +276,7 @@ async function renderCalendar(container, userData) {
 
 function renderDashboard(app, data) {
   let activeTab = 'me';
+  let showBreakdown = false;
 
   function renderTab() {
     if (activeTab === 'me') renderMeTab();
@@ -316,6 +317,82 @@ function renderDashboard(app, data) {
     const debtFullyPaid = debtCovered > 0 && debtCovered >= data.debt;
     const remainingDebt = Math.max(0, data.debt - debtCovered);
 
+    // Mode breakdown for the segmented progress bar. Manual rolls into noob,
+    // matching the cron's day-icon "other" bucket (src/day-icon.ts).
+    const byMode = data.today_by_mode || { standard: 0, situp: 0, noob: 0 };
+    const totalReps = byMode.standard + byMode.situp + byMode.noob;
+    const hasAnyReps = totalReps > 0;
+    // Segment widths are proportional to target. Scale down if total > target.
+    const tgt = data.daily_target || 1;
+    let stdW = (byMode.standard / tgt) * 100;
+    let situpW = (byMode.situp / tgt) * 100;
+    let otherW = (byMode.noob / tgt) * 100;
+    const sumW = stdW + situpW + otherW;
+    if (sumW > 100) {
+      const k = 100 / sumW;
+      stdW *= k; situpW *= k; otherW *= k;
+    }
+    const segmentedBar = `
+      <div class="progress-bar progress-bar-segmented">
+        ${stdW   > 0 ? `<div class="seg seg-std"   style="width:${stdW}%"></div>`   : ''}
+        ${situpW > 0 ? `<div class="seg seg-situp" style="width:${situpW}%"></div>` : ''}
+        ${otherW > 0 ? `<div class="seg seg-other" style="width:${otherW}%"></div>` : ''}
+      </div>
+    `;
+
+    // Percentages for the breakdown view (relative to total reps done today).
+    const pctOf = (n) => totalReps > 0 ? Math.round((n / totalReps) * 100) : 0;
+    const modeRows = [
+      { key: 'std',   label: 'One Punch', count: byMode.standard, pct: pctOf(byMode.standard) },
+      { key: 'situp', label: 'Sit-up',    count: byMode.situp,    pct: pctOf(byMode.situp) },
+      { key: 'other', label: 'Noob',      count: byMode.noob,     pct: pctOf(byMode.noob) },
+    ].filter(m => m.count > 0).sort((a, b) => b.count - a.count);
+
+    // Plurality-winning mode. Same rule as src/day-icon.ts pickDayIcon: most
+    // reps wins, ties break toward the harder mode (standard > situp > other).
+    // This drives the completion border color so the card theme matches
+    // whichever mode dominated the day.
+    const pluralityKey = (() => {
+      const max = Math.max(byMode.standard, byMode.situp, byMode.noob);
+      if (byMode.standard === max) return 'std';
+      if (byMode.situp === max)    return 'situp';
+      return 'other';
+    })();
+    // Palette for the completed state. `rgb` is the raw channel triplet so the
+    // box-shadow glow can be built with rgba(...) at low alpha.
+    const completedStyles = done ? (() => {
+      const palette = {
+        std:   { color: 'var(--one-punch)', rgb: '245,132,38'  },
+        situp: { color: 'var(--info)',      rgb: '59,130,246'  },
+        other: { color: 'var(--primary)',   rgb: '250,250,250' },
+      }[pluralityKey];
+      return {
+        card:  `border-color:${palette.color};box-shadow:0 0 20px rgba(${palette.rgb},0.15),0 0 60px rgba(${palette.rgb},0.05)`,
+        count: `color:${palette.color}`,
+      };
+    })() : null;
+
+    const showBack = showBreakdown && hasAnyReps;
+
+    const frontBody = `
+      <div class="progress-count" style="${completedStyles ? completedStyles.count : ''}">${data.today_total} <span class="progress-target">/ ${data.daily_target}</span></div>
+      ${segmentedBar}
+    `;
+
+    const backBody = `
+      <div class="breakdown-list">
+        ${modeRows.map(m => `
+          <div class="breakdown-row">
+            <div class="breakdown-dot seg-dot-${m.key}"></div>
+            <div class="breakdown-label">${m.label}</div>
+            <div class="breakdown-count">${m.count}</div>
+            <div class="breakdown-pct">${m.pct}%</div>
+          </div>
+        `).join('')}
+      </div>
+      ${segmentedBar}
+    `;
+
     app.innerHTML = `
       ${tabHeader()}
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
@@ -328,13 +405,12 @@ function renderDashboard(app, data) {
           <div style="font-size:16px;letter-spacing:1px;display:flex;align-items:center;justify-content:flex-end;gap:4px">${streakIcons(data.last5days)}${data.streak && data.streak.count > 0 && data.streak.type === 'hot' ? `<span style="font-size:11px;color:var(--success);font-weight:600;margin-left:4px">${data.streak.count}d</span>` : ''}</div>
         </div>
       </div>
-      <div class="progress-card" style="${done ? 'border-color:#22c55e;box-shadow:0 0 20px rgba(34,197,94,0.15),0 0 60px rgba(34,197,94,0.05)' : ''}">
+      <div class="progress-card" id="progress-card-el" style="${completedStyles ? completedStyles.card : ''}">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div class="progress-label">${done ? '✓ COMPLETE' : 'Today'}</div>
-          <div style="font-size:11px;color:var(--text-muted)" id="time-left"></div>
+          <div class="progress-label">${showBack ? 'BREAKDOWN' : (done ? '✓ COMPLETE' : 'Today')}<span class="progress-time-left" id="time-left"></span></div>
+          ${hasAnyReps ? `<button class="flip-btn" id="flip-btn" aria-label="${showBack ? 'Hide breakdown' : 'Show breakdown'}"><i data-lucide="${showBack ? 'arrow-left' : 'pie-chart'}" style="width:14px;height:14px"></i></button>` : ''}
         </div>
-        <div class="progress-count" style="${done ? 'color:#22c55e' : ''}">${data.today_total} <span class="progress-target">/ ${data.daily_target}</span></div>
-        <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;${done ? 'background:#22c55e' : ''}"></div></div>
+        ${showBack ? backBody : frontBody}
         ${data.debt > 0 ? `<div style="margin-top:8px;font-size:12px;color:${debtFullyPaid ? '#22c55e' : 'var(--text-muted)'}">${debtFullyPaid ? '✓' : ''} ${debtCovered}/${data.debt} debt covered</div>` : ''}
         ${done && (data.has_slack || data.has_discord) ? `<div style="margin-top:${data.debt > 0 ? '4' : '8'}px;font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:5px"><i data-lucide="hash" style="width:12px;height:12px;opacity:0.5"></i> Results posted to ${data.has_slack && data.has_discord ? 'Slack and Discord' : data.has_slack ? 'Slack' : 'Discord'} at 7am</div>` : ''}
       </div>
@@ -357,6 +433,13 @@ function renderDashboard(app, data) {
     bindTabs();
     app.querySelector('#btn-camera').addEventListener('click', () => showScreen('camera'));
     app.querySelector('#btn-manual').addEventListener('click', () => showManualEntry());
+    const flipBtn = app.querySelector('#flip-btn');
+    if (flipBtn) {
+      flipBtn.addEventListener('click', () => {
+        showBreakdown = !showBreakdown;
+        renderMeTab();
+      });
+    }
     initIcons();
     renderCalendar(document.getElementById('calendar-container'), data);
 
@@ -365,11 +448,11 @@ function renderDashboard(app, data) {
       const timeEl = document.getElementById('time-left');
       function updateTimeLeft() {
         const ms = new Date(data.next_day_boundary).getTime() - Date.now();
-        if (ms <= 0) { timeEl.textContent = 'resetting...'; return; }
+        if (ms <= 0) { timeEl.textContent = '(resetting...)'; return; }
         const totalMin = Math.floor(ms / 60000);
         const h = Math.floor(totalMin / 60);
         const m = totalMin % 60;
-        timeEl.textContent = h > 0 ? `${h}h ${m}m left` : `${m}m left`;
+        timeEl.textContent = h > 0 ? `(${h}h ${m}m left)` : `(${m}m left)`;
       }
       updateTimeLeft();
       setInterval(updateTimeLeft, 60000);
@@ -617,8 +700,8 @@ function showTutorial(onStart) {
   const isStd = cameraMode === 'standard';
   const isSitup = cameraMode === 'situp';
   const title = isStd ? 'One Punch Mode' : isSitup ? 'Sit-up Mode' : 'Noob Mode';
-  const titleColor = isStd ? 'color:var(--danger)' : isSitup ? 'color:var(--info)' : '';
-  const btnClass = isStd ? 'btn-danger' : isSitup ? 'btn-info' : 'btn-primary';
+  const titleColor = isStd ? 'color:var(--one-punch)' : isSitup ? 'color:var(--info)' : '';
+  const btnClass = isStd ? 'btn-one-punch' : isSitup ? 'btn-info' : 'btn-primary';
 
   app.innerHTML = `
     <div class="camera-screen" style="background:var(--bg);overflow-y:auto">
@@ -628,7 +711,7 @@ function showTutorial(onStart) {
         <div style="display:flex;justify-content:center;margin-bottom:16px">
           <div style="display:inline-flex;background:var(--surface-2);border-radius:8px;overflow:hidden">
             <button id="mode-noob" style="padding:8px 14px;border:none;font-size:13px;font-weight:500;cursor:pointer;background:${!isStd && !isSitup ? 'var(--primary)' : 'transparent'};color:${!isStd && !isSitup ? 'var(--primary-fg)' : 'var(--text)'}">Noob</button>
-            <button id="mode-std" style="padding:8px 14px;border:none;font-size:13px;font-weight:500;cursor:pointer;background:${isStd ? 'var(--danger)' : 'transparent'};color:${isStd ? '#fff' : 'var(--text)'}">One Punch</button>
+            <button id="mode-std" style="padding:8px 14px;border:none;font-size:13px;font-weight:500;cursor:pointer;background:${isStd ? 'var(--one-punch)' : 'transparent'};color:${isStd ? '#fff' : 'var(--text)'}">One Punch</button>
             <button id="mode-situp" style="padding:8px 14px;border:none;font-size:13px;font-weight:500;cursor:pointer;background:${isSitup ? 'var(--info)' : 'transparent'};color:${isSitup ? '#fff' : 'var(--text)'}">Sit-up</button>
           </div>
         </div>
@@ -660,6 +743,13 @@ async function renderCamera(app) {
     let sessionStartTime = null;
     let timerInterval = null;
 
+    // Stop & Save follows the active mode color so the whole screen reads as one
+    // palette. Noob maps to btn-primary (white bg / dark text) — still high
+    // contrast over the camera feed's dark gradient, and matches the mode-select.
+    const stopBtnClass = mode === 'standard' ? 'btn-one-punch'
+      : mode === 'situp' ? 'btn-info'
+      : 'btn-primary';
+
     app.innerHTML = DEV_VIEW ? `
       <div class="camera-screen">
         <div class="camera-feed">
@@ -673,7 +763,7 @@ async function renderCamera(app) {
         </div>
         <div id="cam-debug-panel" style="background:rgba(0,0,0,0.85);padding:8px 12px;font-family:monospace;font-size:11px;line-height:1.6;color:#e2e8f0">
           <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:4px">
-            <span style="color:${mode === 'standard' ? 'var(--danger)' : mode === 'situp' ? 'var(--info)' : 'var(--primary)'};font-weight:bold">${mode === 'standard' ? 'STANDARD' : mode === 'situp' ? 'SITUP' : 'NOOB'}</span>
+            <span style="color:${mode === 'standard' ? 'var(--one-punch)' : mode === 'situp' ? 'var(--info)' : 'var(--primary)'};font-weight:bold">${mode === 'standard' ? 'STANDARD' : mode === 'situp' ? 'SITUP' : 'NOOB'}</span>
             <span>d1: <strong id="d-f1" style="color:#ecc94b">--</strong></span>
             <span>d2: <strong id="d-f2" style="color:#63b3ed">--</strong></span>
             <span>d3: <strong id="d-f3" style="color:#48bb78">--</strong></span>
@@ -690,7 +780,7 @@ async function renderCamera(app) {
           <div class="count-label">${mode === 'situp' ? 'sit-ups detected' : 'pushups detected'}</div>
         </div>
         <div class="camera-controls">
-          <button class="btn btn-danger" id="cam-stop">Stop &amp; Save</button>
+          <button class="btn ${stopBtnClass}" id="cam-stop">Stop &amp; Save</button>
           <button class="btn-flip" id="cam-flip" title="Flip camera"><i data-lucide="refresh-cw" style="width:16px;height:16px"></i></button>
           <button class="btn-flip" id="cam-log" title="Copy debug log">LOG</button>
           <button class="btn-flip" id="cam-help" title="Help">?</button>
@@ -725,7 +815,7 @@ async function renderCamera(app) {
             <div id="cam-timer" style="font-size:20px;font-weight:600;color:rgba(255,255,255,0.9);margin-top:4px;font-variant-numeric:tabular-nums">00:00</div>
           </div>
           <div id="cam-bottom-bar" style="position:absolute;bottom:0;left:0;right:0;padding:12px 16px;padding-bottom:max(12px, env(safe-area-inset-bottom));display:flex;gap:8px">
-            <button class="btn btn-danger" id="cam-stop" style="flex:1;padding:14px">Stop & Save</button>
+            <button class="btn ${stopBtnClass}" id="cam-stop" style="flex:1;padding:14px">Stop & Save</button>
             <button class="prod-btn" id="cam-flip" title="Flip camera"><i data-lucide="refresh-cw" style="width:16px;height:16px"></i></button>
           </div>
         </div>
@@ -869,7 +959,7 @@ async function renderCamera(app) {
       helpOverlay.innerHTML = `
         <div style="padding:24px 20px;max-width:400px;width:100%;position:relative;margin-top:20px">
           <button id="help-close" style="position:absolute;top:0;right:0;background:none;border:none;color:var(--text-dim);cursor:pointer;padding:8px;font-size:20px">&times;</button>
-          <h2 style="text-align:center;margin-bottom:16px;${mode === 'standard' ? 'color:var(--danger)' : mode === 'situp' ? 'color:var(--info)' : ''}">${mode === 'standard' ? 'One Punch Mode' : mode === 'situp' ? 'Sit-up Mode' : 'Noob Mode'}</h2>
+          <h2 style="text-align:center;margin-bottom:16px;${mode === 'standard' ? 'color:var(--one-punch)' : mode === 'situp' ? 'color:var(--info)' : ''}">${mode === 'standard' ? 'One Punch Mode' : mode === 'situp' ? 'Sit-up Mode' : 'Noob Mode'}</h2>
           ${getModeContent(mode)}
         </div>
       `;
