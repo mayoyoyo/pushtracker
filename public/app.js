@@ -541,16 +541,16 @@ function getModeContent(mode) {
     </div>
     <div style="font-weight:600;margin-bottom:10px;font-size:16px;text-align:center">Setup in 3 steps:</div>
     <div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:16px">
-      <div style="width:110px;flex-shrink:0;border-radius:10px;background:var(--surface-2);padding:20px 8px;text-align:center;font-size:40px">🛌</div>
+      <img src="/setup-situp.png" style="width:110px;flex-shrink:0;border-radius:10px;object-fit:contain">
       <div style="flex:1">
         <div style="display:flex;flex-direction:column;gap:12px;font-size:13px;margin-top:14px">
-          <div style="display:flex;gap:8px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:16px">1</span><div><strong style="color:var(--text)">Phone at floor level, sideways</strong><br><span style="color:var(--text-dim)">Prop it on something low so it sees your full profile</span></div></div>
-          <div style="display:flex;gap:8px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:16px">2</span><div><strong style="color:var(--text)">Lie down with knees bent</strong><br><span style="color:var(--text-dim)">Shoulder through knee must be in frame</span></div></div>
-          <div style="display:flex;gap:8px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:16px">3</span><div><strong style="color:var(--text)">Wait for the chime</strong><br><span style="color:var(--text-dim)">Green border means ready</span></div></div>
+          <div style="display:flex;gap:8px;align-items:flex-start"><span style="font-weight:700;color:var(--info);font-size:16px">1</span><div><strong style="color:var(--text)">Phone to your side</strong><br><span style="color:var(--text-dim)">It needs to see your full profile</span></div></div>
+          <div style="display:flex;gap:8px;align-items:flex-start"><span style="font-weight:700;color:var(--info);font-size:16px">2</span><div><strong style="color:var(--text)">Lie down with knees bent</strong><br><span style="color:var(--text-dim)">Shoulders and hips must be in frame</span></div></div>
+          <div style="display:flex;gap:8px;align-items:flex-start"><span style="font-weight:700;color:var(--info);font-size:16px">3</span><div><strong style="color:var(--text)">Wait for the chime</strong><br><span style="color:var(--text-dim)">Green border means ready</span></div></div>
         </div>
       </div>
     </div>
-    <p style="font-size:11px;color:var(--text-muted);line-height:1.5;padding:0 4px">Situp Mode tracks the angle from your shoulders to your hips to your knees. Keep your legs still — reps with moving legs won't count. Same daily target as pushups.</p>`;
+    <p style="font-size:11px;color:var(--text-muted);line-height:1.5;padding:0 4px">Sit-up Mode tracks your spine angle — from lying flat to sitting up. Full range of motion is required for each rep to count. Same daily target as pushups.</p>`;
 
   if (mode === 'standard') return `
     <div style="text-align:center;margin-bottom:20px">
@@ -593,9 +593,9 @@ function showTutorial(onStart) {
   const app = document.getElementById('app');
   const isStd = cameraMode === 'standard';
   const isSitup = cameraMode === 'situp';
-  const title = isStd ? 'One Punch Mode' : isSitup ? 'Situp Mode' : 'Noob Mode';
-  const titleColor = isStd ? 'color:var(--danger)' : '';
-  const btnClass = isStd ? 'btn-danger' : 'btn-primary';
+  const title = isStd ? 'One Punch Mode' : isSitup ? 'Sit-up Mode' : 'Noob Mode';
+  const titleColor = isStd ? 'color:var(--danger)' : isSitup ? 'color:var(--info)' : '';
+  const btnClass = isStd ? 'btn-danger' : isSitup ? 'btn-info' : 'btn-primary';
 
   app.innerHTML = `
     <div class="camera-screen" style="background:var(--bg);overflow-y:auto">
@@ -606,7 +606,7 @@ function showTutorial(onStart) {
           <div style="display:inline-flex;background:var(--surface-2);border-radius:8px;overflow:hidden">
             <button id="mode-noob" style="padding:8px 14px;border:none;font-size:13px;font-weight:500;cursor:pointer;background:${!isStd && !isSitup ? 'var(--primary)' : 'transparent'};color:${!isStd && !isSitup ? 'var(--primary-fg)' : 'var(--text)'}">Noob</button>
             <button id="mode-std" style="padding:8px 14px;border:none;font-size:13px;font-weight:500;cursor:pointer;background:${isStd ? 'var(--danger)' : 'transparent'};color:${isStd ? '#fff' : 'var(--text)'}">One Punch</button>
-            <button id="mode-situp" style="padding:8px 14px;border:none;font-size:13px;font-weight:500;cursor:pointer;background:${isSitup ? 'var(--primary)' : 'transparent'};color:${isSitup ? 'var(--primary-fg)' : 'var(--text)'}">Situp</button>
+            <button id="mode-situp" style="padding:8px 14px;border:none;font-size:13px;font-weight:500;cursor:pointer;background:${isSitup ? 'var(--info)' : 'transparent'};color:${isSitup ? '#fff' : 'var(--text)'}">Sit-up</button>
           </div>
         </div>
 
@@ -629,7 +629,7 @@ async function renderCamera(app) {
   showTutorial(() => startCameraSession());
 
   async function startCameraSession() {
-    let facingMode = (cameraMode === 'standard' || cameraMode === 'situp') ? 'environment' : 'user';
+    let facingMode = 'user';
     let stream = null;
     let tracker = null;
     const mode = cameraMode;
@@ -650,7 +650,7 @@ async function renderCamera(app) {
         </div>
         <div id="cam-debug-panel" style="background:rgba(0,0,0,0.85);padding:8px 12px;font-family:monospace;font-size:11px;line-height:1.6;color:#e2e8f0">
           <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:4px">
-            <span style="color:${mode === 'standard' ? 'var(--danger)' : 'var(--primary)'};font-weight:bold">${mode === 'standard' ? 'STANDARD' : 'NOOB'}</span>
+            <span style="color:${mode === 'standard' ? 'var(--danger)' : mode === 'situp' ? 'var(--info)' : 'var(--primary)'};font-weight:bold">${mode === 'standard' ? 'STANDARD' : mode === 'situp' ? 'SITUP' : 'NOOB'}</span>
             <span>d1: <strong id="d-f1" style="color:#ecc94b">--</strong></span>
             <span>d2: <strong id="d-f2" style="color:#63b3ed">--</strong></span>
             <span>d3: <strong id="d-f3" style="color:#48bb78">--</strong></span>
@@ -664,7 +664,7 @@ async function renderCamera(app) {
         </div>
         <div class="camera-counter">
           <div class="count" id="cam-count">0</div>
-          <div class="count-label">pushups detected</div>
+          <div class="count-label">${mode === 'situp' ? 'sit-ups detected' : 'pushups detected'}</div>
         </div>
         <div class="camera-controls">
           <button class="btn btn-danger" id="cam-stop">Stop &amp; Save</button>
@@ -681,7 +681,7 @@ async function renderCamera(app) {
           <div style="position:absolute;top:16px;right:16px;display:flex;gap:8px;align-items:center">
             <div style="background:rgba(0,0,0,0.5);backdrop-filter:blur(8px);border-radius:20px;padding:6px 12px;font-size:12px;font-weight:600;color:#fff;display:flex;align-items:center;gap:6px">
               ${mode === 'standard' ? '<img src="/opm-fist.png" style="width:14px;height:14px">' : mode === 'situp' ? '<span style="font-size:12px">💪</span>' : '<i data-lucide="user" style="width:14px;height:14px"></i>'}
-              ${mode === 'standard' ? 'One Punch' : mode === 'situp' ? 'Situp' : 'Noob'}
+              ${mode === 'standard' ? 'One Punch' : mode === 'situp' ? 'Sit-up' : 'Noob'}
             </div>
             <button class="prod-btn" id="cam-help" title="Help">?</button>
           </div>
@@ -690,7 +690,7 @@ async function renderCamera(app) {
             <div id="depth-fill" style="position:absolute;bottom:0;left:0;right:0;height:0%;background:#ef4444;transition:height 0.05s,background 0.1s;border-radius:0 0 5px 5px"></div>
           </div>
           <div id="cam-gate-msg" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:#fff;font-size:16px;font-weight:600;text-shadow:0 2px 8px rgba(0,0,0,0.8);pointer-events:none">
-            ${mode === 'standard' ? 'Stand sideways to the camera' : mode === 'situp' ? 'Lie down sideways to the camera' : 'Face the camera'}...
+            ${mode === 'standard' ? 'Stand sideways to the camera' : mode === 'situp' ? 'Lie down with phone to your side' : 'Face the camera'}...
           </div>
           <div id="cam-congrats" style="display:none;position:absolute;top:30%;left:50%;transform:translate(-50%,-50%);text-align:center;color:#fff;pointer-events:none">
             <div style="font-size:24px;font-weight:700;text-shadow:0 2px 8px rgba(0,0,0,0.8)">Daily complete!</div>
@@ -749,6 +749,11 @@ async function renderCamera(app) {
             document.getElementById('d-f2').textContent = 'aVar:' + (d.ankleVar ?? '--');
             document.getElementById('d-f3').textContent = 'knee:' + (d.kneeAng ?? '--');
             document.getElementById('d-f4').textContent = d.gateProgress ? 'gate:' + d.gateProgress : (d.missing && d.missing !== 'none' ? 'need:' + d.missing : '');
+          } else if (mode === 'situp') {
+            document.getElementById('d-f1').textContent = 'ang:' + (d.lift ?? '--');
+            document.getElementById('d-f2').textContent = 'dev:' + (d.liftDelta ?? '--');
+            document.getElementById('d-f3').textContent = 'base:' + (d.baseline ?? '--');
+            document.getElementById('d-f4').textContent = d.gateProgress ? 'gate:' + d.gateProgress : (d.missing && d.missing !== 'none' ? 'need:' + d.missing : '');
           } else {
             document.getElementById('d-f1').textContent = 'nDip:' + (d.noseDip ?? '--');
             document.getElementById('d-f2').textContent = 'sDip:' + (d.shoulderDip ?? '--');
@@ -773,7 +778,7 @@ async function renderCamera(app) {
               gateMsg.textContent = 'Hold still...';
             } else if (missing && missing !== 'none') {
               gateMsg.textContent = mode === 'standard' ? 'Stand sideways to the camera'
-                : mode === 'situp' ? 'Lie down sideways to the camera'
+                : mode === 'situp' ? 'Lie down with phone to your side'
                 : 'Face the camera';
             } else {
               gateMsg.textContent = 'Looking for you...';
@@ -841,7 +846,7 @@ async function renderCamera(app) {
       helpOverlay.innerHTML = `
         <div style="padding:24px 20px;max-width:400px;width:100%;position:relative;margin-top:20px">
           <button id="help-close" style="position:absolute;top:0;right:0;background:none;border:none;color:var(--text-dim);cursor:pointer;padding:8px;font-size:20px">&times;</button>
-          <h2 style="text-align:center;margin-bottom:16px;${mode === 'standard' ? 'color:var(--danger)' : ''}">${mode === 'standard' ? 'One Punch Mode' : 'Noob Mode'}</h2>
+          <h2 style="text-align:center;margin-bottom:16px;${mode === 'standard' ? 'color:var(--danger)' : mode === 'situp' ? 'color:var(--info)' : ''}">${mode === 'standard' ? 'One Punch Mode' : mode === 'situp' ? 'Sit-up Mode' : 'Noob Mode'}</h2>
           ${getModeContent(mode)}
         </div>
       `;
