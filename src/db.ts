@@ -306,4 +306,10 @@ export function linkMayoToHansonIfNeeded(): void {
         AND source_user_id = (SELECT id FROM users WHERE username = 'hanson')
     )
   `);
+  db.exec(`
+    UPDATE users
+    SET daily_target = 0, debt = 0, last5 = '', streak = 0
+    WHERE username = 'mayo'
+      AND source_user_id = (SELECT id FROM users WHERE username = 'hanson')
+  `);
 }

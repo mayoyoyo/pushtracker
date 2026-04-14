@@ -376,6 +376,10 @@ describe("database", () => {
       // Fresh in-memory db, then create the two users and re-run the migration via linkMayoToHansonIfNeeded.
       createUser("hanson", "h", "America/New_York", "2026-04-08T11:00:00Z", "DEV0");
       const mayo = createUser("mayo", "h", "America/New_York", "2026-04-08T11:00:00Z", "FRST");
+      // Give mayo some shadow state that the migration should zero out.
+      updateTarget(mayo.id, 30);
+      updateDebt(mayo.id, 42);
+      updateStreak(mayo.id, "S,F,I", 0);
       logPushups(mayo.id, 7, "manual");
       saveDayResult(mayo.id, "2026-04-06", false, "manual", 7);
 
@@ -387,6 +391,13 @@ describe("database", () => {
       // Mayo's orphaned progress has been wiped
       const hMonth = getMonthResults(h.id, "2026-04");
       expect(hMonth.length).toBe(0);
+      // Mayo's shadow columns on her own row have been zeroed out to avoid
+      // forensic confusion — they're dead state, but leaving them populated
+      // would be misleading.
+      expect(m.daily_target).toBe(0);
+      expect(m.debt).toBe(0);
+      expect(m.last5).toBe("");
+      expect(m.streak).toBe(0);
       // Re-running is a no-op
       linkMayoToHansonIfNeeded();
       expect(getUserById(mayo.id)!.source_user_id).toBe(h.id);
