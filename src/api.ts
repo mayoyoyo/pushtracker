@@ -1,5 +1,5 @@
 import { signup, login, logout, getSessionUser, parseSessionToken, sessionCookie, clearSessionCookie } from "./auth";
-import { logPushups, getTodayLogs, getTodayTotal, getResolvedTeamByGroup, updateTarget, updateDebt, updateTimezone, getGroupName, getMonthResults, hasEverLoggedPushups, getSlackConfig, getDiscordConfig, type User } from "./db";
+import { logPushups, getTodayLogs, getTodayTotal, getResolvedTeamByGroup, updateTarget, updateDebt, updateTimezone, getGroupName, getMonthResults, hasEverLoggedPushups, getSlackConfig, getDiscordConfig, getLifetimeTotals, type User } from "./db";
 import { getNextDayBoundary, getPreviousDayBoundary } from "./timezone";
 import { processExpiredBoundaries } from "./cron";
 import { pickDayIcon } from "./day-icon";
@@ -128,6 +128,10 @@ export async function handleApiRequest(req: Request): Promise<Response> {
 
   if (path === "/api/me/debt" && method === "GET") {
     return json({ debt: user.debt });
+  }
+
+  if (path === "/api/me/lifetime" && method === "GET") {
+    return json(getLifetimeTotals(user.id));
   }
 
   if (path === "/api/pushups" && method === "POST") {

@@ -505,11 +505,34 @@ function showSettings() {
         <span class="setting-label">Timezone</span>
         <span style="font-size:13px;color:var(--text-dim)">${currentUser.timezone}</span>
       </div>
+      <div class="setting-section-label">Lifetime Totals</div>
+      <div class="setting-row">
+        <span class="setting-label" style="display:flex;align-items:center;gap:10px">
+          <img src="/opm-fist.png" style="width:16px;height:16px">
+          Push-ups
+        </span>
+        <span class="lifetime-value" id="lifetime-pushups">…</span>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label" style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:16px">💪</span>
+          Sit-ups
+        </span>
+        <span class="lifetime-value" id="lifetime-situps">…</span>
+      </div>
       <button class="btn btn-primary" style="width:100%;margin-top:16px;margin-bottom:10px" id="set-save">Save</button>
       <button class="btn btn-danger" style="width:100%" id="set-logout">Log Out</button>
     </div>
   `;
   document.body.appendChild(overlay); initIcons();
+
+  // Fetch lifetime totals (separate endpoint, not on /api/me hot path).
+  api('GET', '/api/me/lifetime').then(({ pushups, situps }) => {
+    const pEl = overlay.querySelector('#lifetime-pushups');
+    const sEl = overlay.querySelector('#lifetime-situps');
+    if (pEl) pEl.textContent = pushups.toLocaleString();
+    if (sEl) sEl.textContent = situps.toLocaleString();
+  }).catch(() => { /* leave placeholders on error */ });
 
   overlay.querySelector('#set-save').addEventListener('click', async () => {
     const target = parseInt(overlay.querySelector('#set-target').value) || 0;

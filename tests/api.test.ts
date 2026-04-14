@@ -81,6 +81,28 @@ describe("api", () => {
     });
   });
 
+  describe("GET /api/me/lifetime", () => {
+    test("returns zero totals for a user with no logs", async () => {
+      const res = await authedRequest("GET", "/api/me/lifetime", token);
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ pushups: 0, situps: 0 });
+    });
+
+    test("sums reps into pushups vs situps, including in-progress reps", async () => {
+      await authedRequest("POST", "/api/pushups", token, { count: 40, source: "camera", mode: "standard" });
+      await authedRequest("POST", "/api/pushups", token, { count: 10, source: "camera", mode: "noob" });
+      await authedRequest("POST", "/api/pushups", token, { count: 5,  source: "manual" });
+      await authedRequest("POST", "/api/pushups", token, { count: 25, source: "camera", mode: "situp" });
+      const res = await authedRequest("GET", "/api/me/lifetime", token);
+      expect(await res.json()).toEqual({ pushups: 55, situps: 25 });
+    });
+
+    test("returns 401 without auth", async () => {
+      const res = await handleApiRequest(new Request("http://localhost/api/me/lifetime"));
+      expect(res.status).toBe(401);
+    });
+  });
+
   describe("POST /api/pushups", () => {
     test("logs pushups", async () => {
       const res = await authedRequest("POST", "/api/pushups", token, { count: 25, source: "camera" });

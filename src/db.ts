@@ -49,6 +49,11 @@ export function getDb(path: string = "pushtracker.db"): Database {
   try { db.exec("ALTER TABLE invite_codes ADD COLUMN slack_channel TEXT"); } catch {}
   // Discord integration column on invite_codes
   try { db.exec("ALTER TABLE invite_codes ADD COLUMN discord_webhook_url TEXT"); } catch {}
+  // Composite index for fast per-user + per-mode aggregates (lifetime totals,
+  // today totals, has-ever-logged checks). Without this, pushup_logs does a
+  // full table scan on every user-scoped read — fine at current scale, cheap
+  // to fix preemptively.
+  try { db.exec("CREATE INDEX IF NOT EXISTS idx_pushup_logs_user_mode ON pushup_logs(user_id, mode)"); } catch {}
   // User aliasing: source_user_id for marking alias users
   try { db.exec("ALTER TABLE users ADD COLUMN source_user_id INTEGER REFERENCES users(id)"); } catch {}
   // Day results for calendar history
@@ -228,6 +233,23 @@ export function getDiscordConfig(inviteCode: string): { discord_webhook_url: str
   const row = db.prepare("SELECT discord_webhook_url FROM invite_codes WHERE code = ?").get(inviteCode) as { discord_webhook_url: string | null } | null;
   if (!row || !row.discord_webhook_url) return null;
   return { discord_webhook_url: row.discord_webhook_url };
+}
+
+// Lifetime totals across all of the user's pushup_logs, with today's
+// in-progress reps included (we sum from the raw log table, not day_results,
+// so anything logged before the next rollup still counts). Sit-ups are a
+// single mode; pushups bucket standard + noob + manual together (any non-situp
+// rep). Alias-aware via resolveDataUserId — mayo and hanson see the same row.
+export function getLifetimeTotals(userId: number): { pushups: number; situps: number } {
+  userId = resolveDataUserId(userId);
+  const row = db.prepare(`
+    SELECT
+      COALESCE(SUM(CASE WHEN mode = 'situp'  THEN count ELSE 0 END), 0) AS situps,
+      COALESCE(SUM(CASE WHEN mode <> 'situp' THEN count ELSE 0 END), 0) AS pushups
+    FROM pushup_logs
+    WHERE user_id = ?
+  `).get(userId) as { situps: number; pushups: number };
+  return { pushups: row.pushups, situps: row.situps };
 }
 
 // Session management
