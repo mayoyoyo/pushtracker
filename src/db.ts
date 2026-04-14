@@ -292,10 +292,18 @@ export function linkMayoToHansonIfNeeded(): void {
   `);
   db.exec(`
     DELETE FROM pushup_logs
-    WHERE user_id IN (SELECT id FROM users WHERE username = 'mayo' AND source_user_id IS NOT NULL)
+    WHERE user_id IN (
+      SELECT id FROM users
+      WHERE username = 'mayo'
+        AND source_user_id = (SELECT id FROM users WHERE username = 'hanson')
+    )
   `);
   db.exec(`
     DELETE FROM day_results
-    WHERE user_id IN (SELECT id FROM users WHERE username = 'mayo' AND source_user_id IS NOT NULL)
+    WHERE user_id IN (
+      SELECT id FROM users
+      WHERE username = 'mayo'
+        AND source_user_id = (SELECT id FROM users WHERE username = 'hanson')
+    )
   `);
 }
