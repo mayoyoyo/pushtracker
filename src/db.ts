@@ -47,6 +47,8 @@ export function getDb(path: string = "pushtracker.db"): Database {
   // Slack integration columns on invite_codes
   try { db.exec("ALTER TABLE invite_codes ADD COLUMN slack_bot_token TEXT"); } catch {}
   try { db.exec("ALTER TABLE invite_codes ADD COLUMN slack_channel TEXT"); } catch {}
+  // Discord integration column on invite_codes
+  try { db.exec("ALTER TABLE invite_codes ADD COLUMN discord_webhook_url TEXT"); } catch {}
   // User aliasing: source_user_id for marking alias users
   try { db.exec("ALTER TABLE users ADD COLUMN source_user_id INTEGER REFERENCES users(id)"); } catch {}
   // Day results for calendar history
@@ -220,6 +222,12 @@ export function getSlackConfig(inviteCode: string): { slack_bot_token: string; s
   const row = db.prepare("SELECT slack_bot_token, slack_channel FROM invite_codes WHERE code = ?").get(inviteCode) as { slack_bot_token: string | null; slack_channel: string | null } | null;
   if (!row || !row.slack_bot_token || !row.slack_channel) return null;
   return { slack_bot_token: row.slack_bot_token, slack_channel: row.slack_channel };
+}
+
+export function getDiscordConfig(inviteCode: string): { discord_webhook_url: string } | null {
+  const row = db.prepare("SELECT discord_webhook_url FROM invite_codes WHERE code = ?").get(inviteCode) as { discord_webhook_url: string | null } | null;
+  if (!row || !row.discord_webhook_url) return null;
+  return { discord_webhook_url: row.discord_webhook_url };
 }
 
 // Session management
