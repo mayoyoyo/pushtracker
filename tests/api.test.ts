@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from "bun:test";
-import { getDb, linkAlias, updateTarget, updateDebt, updateStreak, logPushups } from "../src/db";
+import { getDb, linkAlias, updateTarget, updateDebt, updateStreak, logPushups, saveDayResult } from "../src/db";
 import { signup } from "../src/auth";
 import { handleApiRequest } from "../src/api";
 
@@ -138,6 +138,73 @@ describe("api", () => {
       expect(mayoRow.debt).toBe(15);
       expect(mayoRow.streak.count).toBeGreaterThanOrEqual(3);
       expect(mayoRow.today_total).toBe(25);
+    });
+  });
+
+  describe("alias parity across /api/me*", () => {
+    test("/api/me returns identical progress for hanson and mayo sessions", async () => {
+      const { token: hTok, user: hanson } = await signup("hanson3", "1111", "America/New_York", "DEV0");
+      const { token: mTok, user: mayo } = await signup("mayo3", "2222", "America/New_York", "FRST");
+      linkAlias(mayo.id, hanson.id);
+
+      updateTarget(hanson.id, 40);
+      updateDebt(hanson.id, 7);
+      logPushups(hanson.id, 25, "camera", "standard");
+
+      const hRes = await handleApiRequest(new Request("http://x/api/me", {
+        headers: { cookie: `session=${hTok}` },
+      }));
+      const mRes = await handleApiRequest(new Request("http://x/api/me", {
+        headers: { cookie: `session=${mTok}` },
+      }));
+      const hBody = await hRes.json();
+      const mBody = await mRes.json();
+
+      expect(mBody.today_total).toBe(hBody.today_total);
+      expect(mBody.debt).toBe(hBody.debt);
+      expect(mBody.daily_target).toBe(hBody.daily_target);
+      expect(mBody.streak.count).toBe(hBody.streak.count);
+      expect(mBody.last5days).toEqual(hBody.last5days);
+
+      // But identity fields stay distinct
+      expect(mBody.username).toBe("mayo3");
+      expect(hBody.username).toBe("hanson3");
+      expect(mBody.group_name).toBe("Frist");
+      expect(hBody.group_name).toBe("MayoLab");
+    });
+
+    test("POST /api/pushups from mayo session increases hanson's total", async () => {
+      const { token: hTok, user: hanson } = await signup("hanson4", "1111", "America/New_York", "DEV0");
+      const { token: mTok, user: mayo } = await signup("mayo4", "2222", "America/New_York", "FRST");
+      linkAlias(mayo.id, hanson.id);
+
+      await handleApiRequest(new Request("http://x/api/pushups", {
+        method: "POST",
+        headers: { cookie: `session=${mTok}`, "content-type": "application/json" },
+        body: JSON.stringify({ count: 12, source: "manual" }),
+      }));
+
+      const hRes = await handleApiRequest(new Request("http://x/api/me", {
+        headers: { cookie: `session=${hTok}` },
+      }));
+      const hBody = await hRes.json();
+      expect(hBody.today_total).toBe(12);
+    });
+
+    test("/api/me/calendar on mayo returns hanson's day_results", async () => {
+      const { user: hanson } = await signup("hanson5", "1111", "America/New_York", "DEV0");
+      const { token: mTok, user: mayo } = await signup("mayo5", "2222", "America/New_York", "FRST");
+      linkAlias(mayo.id, hanson.id);
+
+      saveDayResult(hanson.id, "2026-04-06", true, "standard", 30);
+      saveDayResult(hanson.id, "2026-04-05", false, "manual", 10);
+
+      const res = await handleApiRequest(new Request("http://x/api/me/calendar?year=2026&month=4", {
+        headers: { cookie: `session=${mTok}` },
+      }));
+      const body = await res.json();
+      expect(body.days.length).toBe(2);
+      expect(body.days.map((d: any) => d.day).sort()).toEqual([5, 6]);
     });
   });
 });
