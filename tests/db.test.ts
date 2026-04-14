@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from "bun:test";
-import { getDb, createUser, getUserByUsername, getUserById, logPushups, getTodayLogs, getTodayTotal, getMonthResults, hasEverLoggedPushups, getTeamByGroup, updateTarget, updateDebt, getGroupName, getSlackConfig, resolveDataUserId, linkAlias, saveDayResult, updateStreak, updateTimezone, getResolvedUserById, getResolvedTeamByGroup, getUsersWithExpiredBoundary } from "../src/db";
+import { getDb, createUser, getUserByUsername, getUserById, logPushups, getTodayLogs, getTodayTotal, getMonthResults, hasEverLoggedPushups, getTeamByGroup, updateTarget, updateDebt, getGroupName, getSlackConfig, resolveDataUserId, linkAlias, saveDayResult, updateStreak, updateTimezone, getResolvedUserById, getResolvedTeamByGroup, getUsersWithExpiredBoundary, linkMayoToHansonIfNeeded } from "../src/db";
 
 describe("database", () => {
   beforeEach(() => {
@@ -368,6 +368,40 @@ describe("database", () => {
       const solo = createUser("solo", "h", "America/New_York", "2026-04-05T11:00:00.000Z", "DEV0");
       const expired = getUsersWithExpiredBoundary("2026-04-09T00:00:00.000Z");
       expect(expired.find(u => u.id === solo.id)).toBeDefined();
+    });
+  });
+
+  describe("one-time mayo→hanson migration", () => {
+    test("links mayo to hanson if both exist", () => {
+      // Fresh in-memory db, then create the two users and re-run the migration via linkMayoToHansonIfNeeded.
+      createUser("hanson", "h", "America/New_York", "2026-04-08T11:00:00Z", "DEV0");
+      const mayo = createUser("mayo", "h", "America/New_York", "2026-04-08T11:00:00Z", "FRST");
+      logPushups(mayo.id, 7, "manual");
+      saveDayResult(mayo.id, "2026-04-06", false, "manual", 7);
+
+      linkMayoToHansonIfNeeded();
+
+      const m = getUserById(mayo.id)!;
+      const h = getUserByUsername("hanson")!;
+      expect(m.source_user_id).toBe(h.id);
+      // Mayo's orphaned progress has been wiped
+      const hMonth = getMonthResults(h.id, "2026-04");
+      expect(hMonth.length).toBe(0);
+      // Re-running is a no-op
+      linkMayoToHansonIfNeeded();
+      expect(getUserById(mayo.id)!.source_user_id).toBe(h.id);
+    });
+
+    test("does nothing when hanson does not exist", () => {
+      createUser("mayo", "h", "America/New_York", "2026-04-08T11:00:00Z", "FRST");
+      linkMayoToHansonIfNeeded();
+      expect(getUserByUsername("mayo")!.source_user_id).toBeNull();
+    });
+
+    test("does nothing when mayo does not exist", () => {
+      createUser("hanson", "h", "America/New_York", "2026-04-08T11:00:00Z", "DEV0");
+      linkMayoToHansonIfNeeded();
+      expect(getUserByUsername("hanson")!.source_user_id).toBeNull();
     });
   });
 });

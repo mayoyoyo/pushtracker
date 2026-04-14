@@ -65,6 +65,7 @@ export function getDb(path: string = "pushtracker.db"): Database {
   db.prepare("UPDATE invite_codes SET group_name = 'Frist' WHERE code = 'FRST' AND group_name = ''").run();
   // Migrate any old DEV users to DEV0
   db.prepare("UPDATE users SET invite_code = 'DEV0' WHERE invite_code = 'DEV'").run();
+  linkMayoToHansonIfNeeded();
   return db;
 }
 
@@ -279,4 +280,22 @@ export function getResolvedTeamByGroup(inviteCode: string): User[] {
       streak: source.streak,
     };
   });
+}
+
+export function linkMayoToHansonIfNeeded(): void {
+  db.exec(`
+    UPDATE users
+    SET source_user_id = (SELECT id FROM users WHERE username = 'hanson')
+    WHERE username = 'mayo'
+      AND source_user_id IS NULL
+      AND EXISTS (SELECT 1 FROM users WHERE username = 'hanson')
+  `);
+  db.exec(`
+    DELETE FROM pushup_logs
+    WHERE user_id IN (SELECT id FROM users WHERE username = 'mayo' AND source_user_id IS NOT NULL)
+  `);
+  db.exec(`
+    DELETE FROM day_results
+    WHERE user_id IN (SELECT id FROM users WHERE username = 'mayo' AND source_user_id IS NOT NULL)
+  `);
 }
