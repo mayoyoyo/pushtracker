@@ -22,14 +22,16 @@ export function processExpiredBoundaries(nowUtc: string): void {
       const todayTotal = getTodayTotal(user.id, prevBoundary, user.next_day_boundary);
       const shortfall = user.daily_target - todayTotal;
 
-      // Update streak: S=standard, F=fire(noob/manual), I=ice(missed)
+      // Update streak: S=standard, U=situp, F=fire(noob/manual/mixed), I=ice(missed)
       const met = user.daily_target > 0 && todayTotal >= user.daily_target;
       let dayIcon = 'I';
       if (met) {
-        const stdTotal = getTodayLogs(user.id, prevBoundary, user.next_day_boundary)
-          .filter(l => l.mode === 'standard')
-          .reduce((sum, l) => sum + l.count, 0);
-        dayIcon = stdTotal >= user.daily_target ? 'S' : 'F';
+        const logs = getTodayLogs(user.id, prevBoundary, user.next_day_boundary);
+        const stdTotal = logs.filter(l => l.mode === 'standard').reduce((sum, l) => sum + l.count, 0);
+        const situpTotal = logs.filter(l => l.mode === 'situp').reduce((sum, l) => sum + l.count, 0);
+        dayIcon = stdTotal >= user.daily_target ? 'S'
+          : situpTotal >= user.daily_target ? 'U'
+          : 'F';
       }
       // Shift last5: append new day, keep max 5
       const days = user.last5 ? user.last5.split(',') : [];
@@ -39,14 +41,19 @@ export function processExpiredBoundaries(nowUtc: string): void {
       // Streak: count consecutive met days from the end
       let newStreak = 0;
       for (let j = days.length - 1; j >= 0; j--) {
-        if (days[j] === 'S' || days[j] === 'F') newStreak++;
+        if (days[j] === 'S' || days[j] === 'F' || days[j] === 'U') newStreak++;
         else break;
       }
       updateStreak(user.id, newLast5, newStreak);
 
       // Save to day_results for calendar (date = the day that just ended)
       const dayDate = DateTime.fromISO(prevBoundary, { zone: 'utc' }).setZone(user.timezone).toISODate();
-      saveDayResult(user.id, dayDate, met, dayIcon === 'S' ? 'standard' : dayIcon === 'F' ? 'noob' : 'manual', todayTotal);
+      saveDayResult(user.id, dayDate, met,
+        dayIcon === 'S' ? 'standard'
+        : dayIcon === 'U' ? 'situp'
+        : dayIcon === 'F' ? 'noob'
+        : 'manual',
+        todayTotal);
 
       // Debt: add shortfall or reduce by surplus
       if (shortfall > 0) {
