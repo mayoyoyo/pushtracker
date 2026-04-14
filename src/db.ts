@@ -207,7 +207,12 @@ export function hasEverLoggedPushups(userId: number): boolean {
 }
 
 export function getUsersWithExpiredBoundary(now: string): User[] {
-  return db.prepare("SELECT * FROM users WHERE next_day_boundary <= ?").all(now) as User[];
+  return db.prepare(`
+    SELECT u.*
+    FROM users u
+    LEFT JOIN users s ON s.id = u.source_user_id
+    WHERE COALESCE(s.next_day_boundary, u.next_day_boundary) <= ?
+  `).all(now) as User[];
 }
 
 export function getSlackConfig(inviteCode: string): { slack_bot_token: string; slack_channel: string } | null {

@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from "bun:test";
-import { getDb, createUser, getUserByUsername, getUserById, logPushups, getTodayLogs, getTodayTotal, getMonthResults, hasEverLoggedPushups, getTeamByGroup, updateTarget, updateDebt, getGroupName, getSlackConfig, resolveDataUserId, linkAlias, saveDayResult, updateStreak, updateTimezone, getResolvedUserById, getResolvedTeamByGroup } from "../src/db";
+import { getDb, createUser, getUserByUsername, getUserById, logPushups, getTodayLogs, getTodayTotal, getMonthResults, hasEverLoggedPushups, getTeamByGroup, updateTarget, updateDebt, getGroupName, getSlackConfig, resolveDataUserId, linkAlias, saveDayResult, updateStreak, updateTimezone, getResolvedUserById, getResolvedTeamByGroup, getUsersWithExpiredBoundary } from "../src/db";
 
 describe("database", () => {
   beforeEach(() => {
@@ -335,6 +335,39 @@ describe("database", () => {
       expect(mayolab.length).toBe(1);
       expect(mayolab[0].username).toBe("hanson");
       expect(mayolab[0].daily_target).toBe(25);
+    });
+  });
+
+  describe("getUsersWithExpiredBoundary with alias", () => {
+    test("returns alias only when source boundary is expired", () => {
+      const hanson = createUser("hanson", "h", "America/New_York", "2026-04-08T11:00:00.000Z", "DEV0");
+      const mayo = createUser("mayo", "h", "America/New_York", "2026-04-20T11:00:00.000Z", "FRST");
+      linkAlias(mayo.id, hanson.id);
+
+      // Hanson's boundary (04-08) is in the past; mayo's raw boundary (04-20) is future.
+      // Effective boundary for mayo = hanson's (04-08), so mayo SHOULD be returned.
+      const expired = getUsersWithExpiredBoundary("2026-04-09T00:00:00.000Z");
+      const ids = expired.map(u => u.id).sort();
+      expect(ids).toContain(hanson.id);
+      expect(ids).toContain(mayo.id);
+    });
+
+    test("does not return alias when source boundary is fresh", () => {
+      const hanson = createUser("hanson", "h", "America/New_York", "2026-04-20T11:00:00.000Z", "DEV0");
+      const mayo = createUser("mayo", "h", "America/New_York", "2026-04-08T11:00:00.000Z", "FRST");
+      linkAlias(mayo.id, hanson.id);
+
+      // Source (hanson) boundary is future; mayo's raw boundary is past.
+      // Effective boundary for mayo = hanson's (future), so mayo must NOT be returned.
+      const expired = getUsersWithExpiredBoundary("2026-04-09T00:00:00.000Z");
+      expect(expired.find(u => u.id === mayo.id)).toBeUndefined();
+      expect(expired.find(u => u.id === hanson.id)).toBeUndefined();
+    });
+
+    test("non-alias user behaves unchanged", () => {
+      const solo = createUser("solo", "h", "America/New_York", "2026-04-05T11:00:00.000Z", "DEV0");
+      const expired = getUsersWithExpiredBoundary("2026-04-09T00:00:00.000Z");
+      expect(expired.find(u => u.id === solo.id)).toBeDefined();
     });
   });
 });
