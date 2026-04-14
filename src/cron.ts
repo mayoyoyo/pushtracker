@@ -84,15 +84,20 @@ export function processExpiredBoundaries(nowUtc: string): void {
       const todayTotal = getTodayTotal(user.id, prevBoundary, user.next_day_boundary);
       const shortfall = user.daily_target - todayTotal;
 
-      // Update streak: S=standard, U=situp, F=fire(noob/manual/mixed), I=ice(missed)
+      // Day icon: S=standard, U=situp, F=fire(noob/manual/mixed), I=ice(missed).
+      // Icon reflects the mode with the most reps that day (plurality, not majority).
+      // Ties break toward the harder mode: standard > situp > noob/manual — matches
+      // the user-facing difficulty ranking (OPM fist > flex > fire).
       const met = user.daily_target > 0 && todayTotal >= user.daily_target;
       let dayIcon = 'I';
       if (met) {
         const logs = getTodayLogs(user.id, prevBoundary, user.next_day_boundary);
         const stdTotal = logs.filter(l => l.mode === 'standard').reduce((sum, l) => sum + l.count, 0);
         const situpTotal = logs.filter(l => l.mode === 'situp').reduce((sum, l) => sum + l.count, 0);
-        dayIcon = stdTotal >= user.daily_target ? 'S'
-          : situpTotal >= user.daily_target ? 'U'
+        const otherTotal = logs.filter(l => l.mode !== 'standard' && l.mode !== 'situp').reduce((sum, l) => sum + l.count, 0);
+        const maxTotal = Math.max(stdTotal, situpTotal, otherTotal);
+        dayIcon = stdTotal === maxTotal ? 'S'
+          : situpTotal === maxTotal ? 'U'
           : 'F';
       }
       // Shift last5: append new day, keep max 5

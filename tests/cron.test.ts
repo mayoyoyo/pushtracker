@@ -85,6 +85,80 @@ describe("cron", () => {
     expect(updated.debt).toBe(0); // 10 - min(30 surplus, 10 debt) = 0
   });
 
+  // --- day icon plurality rule ---
+  //
+  // The day's icon (S/U/F) reflects the mode with the MOST reps that day.
+  // Ties break toward the harder mode: standard > situp > noob/manual.
+  // A missed target is still 'I' regardless of per-mode counts.
+
+  test("day icon: standard plurality wins even with noob reps mixed in", () => {
+    // Was 'F' under the old all-or-nothing rule; now 'S' because std has the plurality.
+    const user = createUser("std_mix", "hash", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
+    updateTarget(user.id, 100);
+    logPushups(user.id, 99, "camera", "standard", "2026-04-06T14:00:00Z");
+    logPushups(user.id, 1, "camera", "noob", "2026-04-06T14:05:00Z");
+    processExpiredBoundaries("2026-04-07T12:00:00Z");
+    expect(getUserById(user.id)!.last5).toBe("S");
+  });
+
+  test("day icon: situp plurality wins when standard is underweight", () => {
+    // Was 'F' under the old rule (neither subtotal hit 100); now 'U' because situp > std.
+    const user = createUser("situp_maj", "hash", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
+    updateTarget(user.id, 100);
+    logPushups(user.id, 60, "camera", "situp", "2026-04-06T14:00:00Z");
+    logPushups(user.id, 40, "camera", "standard", "2026-04-06T14:05:00Z");
+    processExpiredBoundaries("2026-04-07T12:00:00Z");
+    expect(getUserById(user.id)!.last5).toBe("U");
+  });
+
+  test("day icon: tie between standard and situp breaks toward standard", () => {
+    const user = createUser("tie_std_situp", "hash", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
+    updateTarget(user.id, 100);
+    logPushups(user.id, 50, "camera", "standard", "2026-04-06T14:00:00Z");
+    logPushups(user.id, 50, "camera", "situp", "2026-04-06T14:05:00Z");
+    processExpiredBoundaries("2026-04-07T12:00:00Z");
+    expect(getUserById(user.id)!.last5).toBe("S");
+  });
+
+  test("day icon: tie between situp and noob breaks toward situp", () => {
+    const user = createUser("tie_situp_noob", "hash", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
+    updateTarget(user.id, 100);
+    logPushups(user.id, 50, "camera", "situp", "2026-04-06T14:00:00Z");
+    logPushups(user.id, 50, "camera", "noob", "2026-04-06T14:05:00Z");
+    processExpiredBoundaries("2026-04-07T12:00:00Z");
+    expect(getUserById(user.id)!.last5).toBe("U");
+  });
+
+  test("day icon: tie between standard and noob breaks toward standard", () => {
+    const user = createUser("tie_std_noob", "hash", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
+    updateTarget(user.id, 100);
+    logPushups(user.id, 50, "camera", "standard", "2026-04-06T14:00:00Z");
+    logPushups(user.id, 50, "camera", "noob", "2026-04-06T14:05:00Z");
+    processExpiredBoundaries("2026-04-07T12:00:00Z");
+    expect(getUserById(user.id)!.last5).toBe("S");
+  });
+
+  test("day icon: noob plurality still gets fire despite hard-mode reps", () => {
+    // noob=40 is the single largest bucket, even though std+situp combined > noob.
+    const user = createUser("noob_maj", "hash", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
+    updateTarget(user.id, 100);
+    logPushups(user.id, 30, "camera", "standard", "2026-04-06T14:00:00Z");
+    logPushups(user.id, 30, "camera", "situp", "2026-04-06T14:05:00Z");
+    logPushups(user.id, 40, "camera", "noob", "2026-04-06T14:10:00Z");
+    processExpiredBoundaries("2026-04-07T12:00:00Z");
+    expect(getUserById(user.id)!.last5).toBe("F");
+  });
+
+  test("day icon: manual reps are bucketed with noob for plurality purposes", () => {
+    // 49 standard + 51 manual. other=51 > std=49, so the plurality is manual → F.
+    const user = createUser("manual_bucket", "hash", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
+    updateTarget(user.id, 100);
+    logPushups(user.id, 49, "camera", "standard", "2026-04-06T14:00:00Z");
+    logPushups(user.id, 51, "manual", "manual", "2026-04-06T14:05:00Z");
+    processExpiredBoundaries("2026-04-07T12:00:00Z");
+    expect(getUserById(user.id)!.last5).toBe("F");
+  });
+
   test("calls Slack when team has slack config", () => {
     const db = getDb(":memory:");
     db.prepare("UPDATE invite_codes SET slack_bot_token = 'xoxb-test', slack_channel = 'C123' WHERE code = 'DEV0'").run();
