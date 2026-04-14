@@ -14,6 +14,7 @@
   --warning: #eab308;
   --danger: #ef4444;
   --info: #3b82f6;
+  --one-punch: #f58426; /* Knicks orange — mode color for One Punch */
   --radius: 8px;
   --radius-lg: 12px;
 }
@@ -78,6 +79,7 @@ body {
 .btn-primary { background: var(--primary); color: var(--primary-fg); }
 .btn-danger { background: var(--danger); color: #fff; }
 .btn-info { background: var(--info); color: #fff; }
+.btn-one-punch { background: var(--one-punch); color: #fff; }
 .btn-surface { background: transparent; color: var(--text); border: 1px solid var(--border); }
 
 .auth-toggle { font-size: 13px; color: var(--text-muted); text-align: center; }
@@ -106,6 +108,94 @@ body {
 .progress-target { font-size: 18px; color: var(--text-muted); font-weight: 400; }
 .progress-bar { background: var(--border); border-radius: 999px; height: 4px; margin-top: 14px; overflow: hidden; }
 .progress-fill { background: var(--primary); height: 100%; border-radius: 999px; transition: width 0.3s; }
+
+/* Segmented progress bar (per-mode breakdown). Replaces .progress-fill. */
+.progress-bar-segmented {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  background: var(--border);
+  overflow: visible;
+}
+.progress-bar-segmented .seg {
+  height: 100%;
+  min-height: 4px;
+  border-radius: 999px;
+  transition: width 0.3s;
+}
+/* Mode colors match the camera mode-select buttons for consistency. */
+.seg-std   { background: var(--one-punch); } /* orange — One Punch (standard) */
+.seg-situp { background: var(--info);      } /* blue — sit-up */
+.seg-other { background: var(--primary);   } /* white — noob / manual */
+
+.flip-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.flip-btn:hover {
+  border-color: var(--text-dim);
+  color: var(--text);
+}
+
+.progress-time-left {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+  margin-left: 6px;
+}
+
+.breakdown-list {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.breakdown-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+}
+.breakdown-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+.seg-dot-std   { background: var(--one-punch); }
+.seg-dot-situp { background: var(--info); }
+.seg-dot-other { background: var(--primary); }
+.breakdown-label {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text);
+}
+.breakdown-count {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  min-width: 32px;
+  text-align: right;
+}
+.breakdown-pct {
+  font-size: 11px;
+  color: var(--text-muted);
+  min-width: 36px;
+  text-align: right;
+}
 
 .debt-card {
   border: 1px solid var(--border); border-radius: var(--radius-lg);

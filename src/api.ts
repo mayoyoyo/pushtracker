@@ -74,10 +74,18 @@ export async function handleApiRequest(req: Request): Promise<Response> {
     const prevBoundary = getPreviousDayBoundary(user.timezone, user.next_day_boundary);
     const todayTotal = getTodayTotal(user.id, prevBoundary, user.next_day_boundary);
     const groupName = getGroupName(user.invite_code);
-    // Parse last5 from user row, prepend today's live status
+    // Fetch today's logs once — used for both the icon and the mode breakdown.
+    const todayLogs = getTodayLogs(user.id, prevBoundary, user.next_day_boundary);
     const todayMet = user.daily_target > 0 && todayTotal >= user.daily_target;
-    const todayLogs = todayMet ? getTodayLogs(user.id, prevBoundary, user.next_day_boundary) : [];
     const todayIcon = pickDayIcon(todayLogs, user.daily_target);
+    // Per-mode breakdown for the segmented progress bar. Manual rolls into noob,
+    // matching the day-icon "other" bucket in src/day-icon.ts.
+    const today_by_mode = { standard: 0, situp: 0, noob: 0 };
+    for (const log of todayLogs) {
+      if (log.mode === 'standard') today_by_mode.standard += log.count;
+      else if (log.mode === 'situp') today_by_mode.situp += log.count;
+      else today_by_mode.noob += log.count;
+    }
     const everLogged = hasEverLoggedPushups(user.id);
     const pastIcons = user.last5 ? user.last5.split(',') : [];
     const allIcons = everLogged ? (todayMet ? [...pastIcons, todayIcon] : pastIcons).slice(-5) : [];
@@ -96,6 +104,7 @@ export async function handleApiRequest(req: Request): Promise<Response> {
     return json({
       ...publicUserData(user),
       today_total: todayTotal,
+      today_by_mode,
       next_day_boundary: user.next_day_boundary,
       created_at: user.created_at,
       group_name: groupName,
