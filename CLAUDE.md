@@ -104,3 +104,32 @@ bun --hot ./index.ts
 ```
 
 For more information, read the Bun API docs in `node_modules/bun-types/docs/**.mdx`.
+
+## User Aliasing (IMPORTANT)
+
+This app has a user-alias mechanism: `users.source_user_id` (nullable, self-ref).
+When set, that user is an alias — all progress data and settings live under
+the source user. Currently only `mayo` → `hanson` (same person, two orgs).
+
+**Rules for any future DB function that takes a `user_id`:**
+- If it reads or writes `pushup_logs`, `day_results`, or any progress/settings
+  column on `users` (`debt`, `streak`, `last5`, `daily_target`, `timezone`),
+  it MUST call `resolveDataUserId(userId)` first. See existing functions in
+  `src/db.ts` for the pattern.
+- `getUserById` / `getUserByUsername` / session / auth code are the only
+  intentional exceptions — they need the raw alias row.
+- `updateNextDayBoundary` stays raw, but MUST NOT be called on alias rows.
+  Cron is the only caller and it skips alias rows for boundary advancement.
+- `getUsersWithExpiredBoundary` resolves via JOIN on `source_user_id` so an
+  alias row is only returned when its source's boundary is expired.
+- Cron's day-end rollup MUST skip alias rows for debt/streak/day_results
+  updates — only the source row runs the rollup. Alias rows still fire their
+  own org's Slack post using the source row's stats.
+- API endpoints that return user data should use `getResolvedUserById` /
+  `getResolvedTeamByGroup` rather than raw `getUserById` / `getTeamByGroup`,
+  so the response reflects the source's progress/settings.
+- Never hardcode usernames in application code. The resolver is the authority.
+
+If you're adding a feature that touches per-user data, grep for
+`resolveDataUserId` and `getResolvedUserById` to find the existing resolution
+points and match them.

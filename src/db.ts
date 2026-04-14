@@ -47,6 +47,10 @@ export function getDb(path: string = "pushtracker.db"): Database {
   // Slack integration columns on invite_codes
   try { db.exec("ALTER TABLE invite_codes ADD COLUMN slack_bot_token TEXT"); } catch {}
   try { db.exec("ALTER TABLE invite_codes ADD COLUMN slack_channel TEXT"); } catch {}
+  // Discord integration column on invite_codes
+  try { db.exec("ALTER TABLE invite_codes ADD COLUMN discord_webhook_url TEXT"); } catch {}
+  // User aliasing: source_user_id for marking alias users
+  try { db.exec("ALTER TABLE users ADD COLUMN source_user_id INTEGER REFERENCES users(id)"); } catch {}
   // Day results for calendar history
   db.exec(`CREATE TABLE IF NOT EXISTS day_results (
     user_id INTEGER NOT NULL REFERENCES users(id),
@@ -63,6 +67,7 @@ export function getDb(path: string = "pushtracker.db"): Database {
   db.prepare("UPDATE invite_codes SET group_name = 'Frist' WHERE code = 'FRST' AND group_name = ''").run();
   // Migrate any old DEV users to DEV0
   db.prepare("UPDATE users SET invite_code = 'DEV0' WHERE invite_code = 'DEV'").run();
+  linkMayoToHansonIfNeeded();
   return db;
 }
 
@@ -78,6 +83,7 @@ export interface User {
   created_at: string;
   last5: string;
   streak: number;
+  source_user_id: number | null;
 }
 
 export interface PushupLog {
@@ -91,6 +97,19 @@ export interface PushupLog {
 
 export function validateInviteCode(code: string): boolean {
   return db.prepare("SELECT 1 FROM invite_codes WHERE code = ?").get(code) !== null;
+}
+
+export function resolveDataUserId(userId: number): number {
+  const row = db.prepare(
+    "SELECT source_user_id FROM users WHERE id = ?"
+  ).get(userId) as { source_user_id: number | null } | null;
+  return row?.source_user_id ?? userId;
+}
+
+// Test helper and migration primitive: mark `aliasId` as an alias of `sourceId`.
+// Callers in production code go through the one-time username-based migration.
+export function linkAlias(aliasId: number, sourceId: number): void {
+  db.prepare("UPDATE users SET source_user_id = ? WHERE id = ?").run(sourceId, aliasId);
 }
 
 export function createUser(username: string, passcode: string, timezone: string, nextDayBoundary: string, inviteCode: string): User {
@@ -109,14 +128,17 @@ export function getUserById(id: number): User | null {
 }
 
 export function updateTarget(userId: number, target: number): void {
+  userId = resolveDataUserId(userId);
   db.prepare("UPDATE users SET daily_target = ? WHERE id = ?").run(target, userId);
 }
 
 export function updateDebt(userId: number, delta: number): void {
+  userId = resolveDataUserId(userId);
   db.prepare("UPDATE users SET debt = MAX(0, debt + ?) WHERE id = ?").run(delta, userId);
 }
 
 export function updateTimezone(userId: number, timezone: string, nextDayBoundary: string): void {
+  userId = resolveDataUserId(userId);
   db.prepare("UPDATE users SET timezone = ?, next_day_boundary = ? WHERE id = ?").run(timezone, nextDayBoundary, userId);
 }
 
@@ -125,6 +147,7 @@ export function updateNextDayBoundary(userId: number, nextDayBoundary: string): 
 }
 
 export function logPushups(userId: number, count: number, source: string, mode: string = 'manual', loggedAt?: string): PushupLog {
+  userId = resolveDataUserId(userId);
   if (loggedAt) {
     return db.prepare(
       "INSERT INTO pushup_logs (user_id, count, source, mode, logged_at) VALUES (?, ?, ?, ?, ?) RETURNING *"
@@ -136,12 +159,14 @@ export function logPushups(userId: number, count: number, source: string, mode: 
 }
 
 export function getTodayLogs(userId: number, dayStart: string, dayEnd: string): PushupLog[] {
+  userId = resolveDataUserId(userId);
   return db.prepare(
     "SELECT * FROM pushup_logs WHERE user_id = ? AND logged_at >= ? AND logged_at < ? ORDER BY logged_at"
   ).all(userId, dayStart, dayEnd) as PushupLog[];
 }
 
 export function getTodayTotal(userId: number, dayStart: string, dayEnd: string): number {
+  userId = resolveDataUserId(userId);
   const row = db.prepare(
     "SELECT COALESCE(SUM(count), 0) as total FROM pushup_logs WHERE user_id = ? AND logged_at >= ? AND logged_at < ?"
   ).get(userId, dayStart, dayEnd) as { total: number };
@@ -153,12 +178,14 @@ export function getTeamByGroup(inviteCode: string): User[] {
 }
 
 export function saveDayResult(userId: number, dayDate: string, met: boolean, mode: string, total: number): void {
+  userId = resolveDataUserId(userId);
   db.prepare(
     "INSERT OR REPLACE INTO day_results (user_id, day_date, met, mode, total) VALUES (?, ?, ?, ?, ?)"
   ).run(userId, dayDate, met ? 1 : 0, mode, total);
 }
 
 export function getMonthResults(userId: number, yearMonth: string): Array<{ day_date: string; met: boolean; mode: string; total: number }> {
+  userId = resolveDataUserId(userId);
   const rows = db.prepare(
     "SELECT * FROM day_results WHERE user_id = ? AND day_date LIKE ? ORDER BY day_date"
   ).all(userId, yearMonth + '%') as Array<{ day_date: string; met: number; mode: string; total: number }>;
@@ -166,6 +193,7 @@ export function getMonthResults(userId: number, yearMonth: string): Array<{ day_
 }
 
 export function updateStreak(userId: number, last5: string, streak: number): void {
+  userId = resolveDataUserId(userId);
   db.prepare("UPDATE users SET last5 = ?, streak = ? WHERE id = ?").run(last5, streak, userId);
 }
 
@@ -176,18 +204,30 @@ export function getGroupName(inviteCode: string): string {
 
 
 export function hasEverLoggedPushups(userId: number): boolean {
+  userId = resolveDataUserId(userId);
   const row = db.prepare("SELECT 1 FROM pushup_logs WHERE user_id = ? LIMIT 1").get(userId);
   return row !== null;
 }
 
 export function getUsersWithExpiredBoundary(now: string): User[] {
-  return db.prepare("SELECT * FROM users WHERE next_day_boundary <= ?").all(now) as User[];
+  return db.prepare(`
+    SELECT u.*
+    FROM users u
+    LEFT JOIN users s ON s.id = u.source_user_id
+    WHERE COALESCE(s.next_day_boundary, u.next_day_boundary) <= ?
+  `).all(now) as User[];
 }
 
 export function getSlackConfig(inviteCode: string): { slack_bot_token: string; slack_channel: string } | null {
   const row = db.prepare("SELECT slack_bot_token, slack_channel FROM invite_codes WHERE code = ?").get(inviteCode) as { slack_bot_token: string | null; slack_channel: string | null } | null;
   if (!row || !row.slack_bot_token || !row.slack_channel) return null;
   return { slack_bot_token: row.slack_bot_token, slack_channel: row.slack_channel };
+}
+
+export function getDiscordConfig(inviteCode: string): { discord_webhook_url: string } | null {
+  const row = db.prepare("SELECT discord_webhook_url FROM invite_codes WHERE code = ?").get(inviteCode) as { discord_webhook_url: string | null } | null;
+  if (!row || !row.discord_webhook_url) return null;
+  return { discord_webhook_url: row.discord_webhook_url };
 }
 
 // Session management
@@ -201,4 +241,83 @@ export function getSession(token: string): { token: string; user_id: number; exp
 
 export function deleteSession(token: string): void {
   db.prepare("DELETE FROM sessions WHERE token = ?").run(token);
+}
+
+export function getResolvedUserById(id: number): User | null {
+  const row = db.prepare("SELECT * FROM users WHERE id = ?").get(id) as User | null;
+  if (!row) return null;
+  if (row.source_user_id == null) return row;
+  const source = db.prepare("SELECT * FROM users WHERE id = ?").get(row.source_user_id) as User | null;
+  if (!source) return row;
+  return {
+    // identity from alias
+    id: row.id,
+    username: row.username,
+    passcode: row.passcode,
+    invite_code: row.invite_code,
+    created_at: row.created_at,
+    source_user_id: row.source_user_id,
+    // progress/settings from source
+    daily_target: source.daily_target,
+    debt: source.debt,
+    timezone: source.timezone,
+    next_day_boundary: source.next_day_boundary,
+    last5: source.last5,
+    streak: source.streak,
+  };
+}
+
+export function getResolvedTeamByGroup(inviteCode: string): User[] {
+  const rows = db.prepare("SELECT * FROM users WHERE invite_code = ? ORDER BY username").all(inviteCode) as User[];
+  return rows.map(row => {
+    if (row.source_user_id == null) return row;
+    const source = db.prepare("SELECT * FROM users WHERE id = ?").get(row.source_user_id) as User | null;
+    if (!source) return row;
+    return {
+      id: row.id,
+      username: row.username,
+      passcode: row.passcode,
+      invite_code: row.invite_code,
+      created_at: row.created_at,
+      source_user_id: row.source_user_id,
+      daily_target: source.daily_target,
+      debt: source.debt,
+      timezone: source.timezone,
+      next_day_boundary: source.next_day_boundary,
+      last5: source.last5,
+      streak: source.streak,
+    };
+  });
+}
+
+export function linkMayoToHansonIfNeeded(): void {
+  db.exec(`
+    UPDATE users
+    SET source_user_id = (SELECT id FROM users WHERE username = 'hanson')
+    WHERE username = 'mayo'
+      AND source_user_id IS NULL
+      AND EXISTS (SELECT 1 FROM users WHERE username = 'hanson')
+  `);
+  db.exec(`
+    DELETE FROM pushup_logs
+    WHERE user_id IN (
+      SELECT id FROM users
+      WHERE username = 'mayo'
+        AND source_user_id = (SELECT id FROM users WHERE username = 'hanson')
+    )
+  `);
+  db.exec(`
+    DELETE FROM day_results
+    WHERE user_id IN (
+      SELECT id FROM users
+      WHERE username = 'mayo'
+        AND source_user_id = (SELECT id FROM users WHERE username = 'hanson')
+    )
+  `);
+  db.exec(`
+    UPDATE users
+    SET daily_target = 0, debt = 0, last5 = '', streak = 0
+    WHERE username = 'mayo'
+      AND source_user_id = (SELECT id FROM users WHERE username = 'hanson')
+  `);
 }

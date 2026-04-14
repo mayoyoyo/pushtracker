@@ -2,7 +2,7 @@
 
 **Date:** 2026-04-13
 **Status:** Spec — awaiting plan
-**Scope:** One admin user (the author) holds two accounts across two orgs: `hanson` in MayoLab and `mayo` in Frist. The two accounts must behave as a single person: identical progress, identical settings, a single source of truth, with no possibility of drift. Pushups logged under either account count toward both. This is a niche, hardcoded case — nobody else is expected to hold two accounts.
+**Scope:** One admin user (the author) holds two accounts across two orgs: `hanson` in Frist (FRST) and `mayo` in MayoLab (DEV0). The two accounts must behave as a single person: identical progress, identical settings, a single source of truth, with no possibility of drift. Pushups logged under either account count toward both. This is a niche, hardcoded case — nobody else is expected to hold two accounts.
 
 ## Goal
 
@@ -12,8 +12,8 @@ Make `mayo` a transparent alias of `hanson` at the data layer, such that:
 - Any read of mayo's settings returns hanson's settings (daily target, timezone, next-day boundary).
 - Any write initiated from mayo's session (logging pushups, changing target, changing timezone) is applied to hanson's row.
 - The nightly day-end rollup (debt accrual, streak update, last5 shift, day_results insert) runs exactly once, against hanson's row.
-- Each org's Slack channel still receives a day-end post whenever the day closes. MayoLab's post (if ever configured) shows "hanson …"; Frist's post shows "mayo …" — both with the same numbers.
-- The Frist org's team view shows `mayo`'s card with hanson's full stats (total, last5 dots, streak, debt, daily_target).
+- Each org's Slack channel still receives a day-end post whenever the day closes. Frist's post (the only configured channel today) shows "hanson …"; MayoLab's post (if ever configured) would show "mayo …" — both with the same numbers.
+- The MayoLab org's team view shows `mayo`'s card with hanson's full stats (total, last5 dots, streak, debt, daily_target).
 - The mechanism is robust against future edits: a new developer (or future LLM session) touching per-user data cannot accidentally bypass the alias.
 
 ## Non-goals
@@ -129,7 +129,7 @@ For each expired row:
 
 ## Slack fan-out
 
-`postDayResult(token, channel, username, ...)` in `slack.ts` is unchanged. The fan-out happens naturally because each alias row iterates independently in cron with its own `invite_code` lookup via `getSlackConfig`. Frist sees `mayo: 30/20 ✅`, MayoLab (if configured) sees `hanson: 30/20 ✅`. Identical stats, different channel + username.
+`postDayResult(token, channel, username, ...)` in `slack.ts` is unchanged. The fan-out happens naturally because each alias row iterates independently in cron with its own `invite_code` lookup via `getSlackConfig`. Frist sees `hanson: 30/20 ✅` (non-alias branch), MayoLab (if configured) would see `mayo: 30/20 ✅` (alias branch). Identical stats, different channel + username.
 
 ## One-time setup (migration)
 

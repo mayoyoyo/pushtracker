@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, mock } from "bun:test";
-import { getDb, createUser, getUserById, logPushups, updateTarget, updateDebt } from "../src/db";
+import { getDb, createUser, getUserById, logPushups, updateTarget, updateDebt, linkAlias } from "../src/db";
 import { processExpiredBoundaries } from "../src/cron";
 
 describe("cron", () => {
@@ -111,6 +111,64 @@ describe("cron", () => {
     globalThis.fetch = originalFetch;
   });
 
+  test("alias row does not double-roll and fires its own org's slack post", async () => {
+    const db = getDb(":memory:");
+    // Configure slack ONLY on Frist so we can assert exactly one post.
+    db.exec("UPDATE invite_codes SET slack_bot_token = 'xoxb-fake', slack_channel = '#frist' WHERE code = 'FRST'");
+
+    const hanson = createUser("hanson", "h", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
+    const mayo = createUser("mayo", "h", "America/New_York", "2026-04-07T11:00:00.000Z", "FRST");
+    linkAlias(mayo.id, hanson.id);
+
+    updateTarget(hanson.id, 50);
+    logPushups(hanson.id, 60, "camera", "standard", "2026-04-06T14:00:00Z");
+
+    const calls: any[] = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (url: any, init: any) => {
+      calls.push({ url: String(url), body: JSON.parse(init?.body ?? "{}") });
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    }) as any;
+
+    try {
+      processExpiredBoundaries("2026-04-07T12:00:00.000Z");
+      // postDayResult is fire-and-forget in cron; flush microtasks so the
+      // stubbed fetch's promise chain completes before we assert.
+      await new Promise(r => setTimeout(r, 0));
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+
+    // Source row has rollup applied exactly once
+    const h = getUserById(hanson.id)!;
+    expect(h.debt).toBe(0);
+    expect(h.streak).toBe(1);
+    expect(h.next_day_boundary).toBe("2026-04-08T11:00:00.000Z");
+
+    // Alias row is untouched in debt/streak/last5/next_day_boundary
+    const m = getUserById(mayo.id)!;
+    expect(m.debt).toBe(0);
+    expect(m.streak).toBe(0);
+    expect(m.last5).toBe("");
+    expect(m.next_day_boundary).toBe("2026-04-07T11:00:00.000Z");
+
+    // Slack fired exactly once, with mayo's username, to Frist's channel
+    expect(calls.length).toBe(1);
+    expect(calls[0].url).toContain("chat.postMessage");
+    expect(calls[0].body.channel).toBe("#frist");
+    const blob = JSON.stringify(calls[0].body);
+    expect(blob).toContain("mayo");
+    expect(blob).not.toContain("\"hanson\"");
+
+    // Regression guard for C1: the alias Slack post must use the day that just
+    // ended (April 6), not the day the source advanced into (April 7), and must
+    // reflect the source's actual rollup stats (60/50 ✅).
+    expect(blob).toContain("April 6");
+    expect(blob).not.toContain("April 7");
+    expect(blob).toContain("60/50");
+    expect(blob).toContain("✅");
+  });
+
   test("does not call Slack when team has no slack config", () => {
     getDb(":memory:");
     const user = createUser("noslack", "hash", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
@@ -126,6 +184,115 @@ describe("cron", () => {
 
     processExpiredBoundaries("2026-04-07T12:00:00Z");
     expect(called).toBe(false);
+
+    globalThis.fetch = originalFetch;
+  });
+
+  test("calls Discord when team has discord config", () => {
+    const db = getDb(":memory:");
+    db.prepare("UPDATE invite_codes SET discord_webhook_url = 'https://discord.com/api/webhooks/123/abc' WHERE code = 'DEV0'").run();
+    const user = createUser("discorduser", "hash", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
+    updateTarget(user.id, 20);
+    logPushups(user.id, 25, "camera", "standard", "2026-04-06T14:00:00Z");
+
+    const originalFetch = globalThis.fetch;
+    const calls: { url: string; body: any }[] = [];
+    globalThis.fetch = mock(async (url: any, opts: any) => {
+      calls.push({ url: url as string, body: JSON.parse(opts.body) });
+      return new Response(null, { status: 204 });
+    }) as any;
+
+    processExpiredBoundaries("2026-04-07T12:00:00Z");
+
+    expect(calls.length).toBe(1);
+    expect(calls[0].url).toBe("https://discord.com/api/webhooks/123/abc");
+    expect(calls[0].body.embeds).toBeDefined();
+    expect(calls[0].body.embeds[0].title).toContain("discorduser");
+    expect(calls[0].body.embeds[0].fields[0].value).toContain("25 / 20");
+    expect(calls[0].body.embeds[0].fields[0].value).toContain("✅");
+    expect(calls[0].body.allowed_mentions).toEqual({ parse: [] });
+
+    globalThis.fetch = originalFetch;
+  });
+
+  test("does not call Discord when team has no discord config", () => {
+    getDb(":memory:");
+    const user = createUser("nodiscord", "hash", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
+    updateTarget(user.id, 20);
+    logPushups(user.id, 25, "camera", "standard", "2026-04-06T14:00:00Z");
+
+    const originalFetch = globalThis.fetch;
+    let called = false;
+    globalThis.fetch = mock(async () => {
+      called = true;
+      return new Response(null, { status: 204 });
+    }) as any;
+
+    processExpiredBoundaries("2026-04-07T12:00:00Z");
+    expect(called).toBe(false);
+
+    globalThis.fetch = originalFetch;
+  });
+
+  test("alias row fires Discord using source's pre-advance rollup", async () => {
+    const db = getDb(":memory:");
+    // Configure Discord ONLY on Frist so we can assert exactly one post.
+    db.exec("UPDATE invite_codes SET discord_webhook_url = 'https://discord.com/api/webhooks/frist/abc' WHERE code = 'FRST'");
+
+    const hanson = createUser("hanson", "h", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
+    const mayo = createUser("mayo", "h", "America/New_York", "2026-04-07T11:00:00.000Z", "FRST");
+    linkAlias(mayo.id, hanson.id);
+
+    updateTarget(hanson.id, 50);
+    logPushups(hanson.id, 60, "camera", "standard", "2026-04-06T14:00:00Z");
+
+    const calls: any[] = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (url: any, init: any) => {
+      calls.push({ url: String(url), body: JSON.parse(init?.body ?? "{}") });
+      return new Response(null, { status: 204 });
+    }) as any;
+
+    try {
+      processExpiredBoundaries("2026-04-07T12:00:00.000Z");
+      await new Promise(r => setTimeout(r, 0));
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+
+    expect(calls.length).toBe(1);
+    expect(calls[0].url).toBe("https://discord.com/api/webhooks/frist/abc");
+    const embed = calls[0].body.embeds[0];
+    expect(embed.title).toContain("mayo");
+    expect(embed.title).not.toContain("hanson");
+    expect(embed.title).toContain("April 6");
+    expect(embed.fields[0].value).toContain("60 / 50");
+    expect(embed.fields[0].value).toContain("✅");
+    expect(calls[0].body.allowed_mentions).toEqual({ parse: [] });
+  });
+
+  test("calls both Slack and Discord when both are configured", () => {
+    const db = getDb(":memory:");
+    db.prepare("UPDATE invite_codes SET slack_bot_token = 'xoxb-test', slack_channel = 'C123', discord_webhook_url = 'https://discord.com/api/webhooks/1/a' WHERE code = 'DEV0'").run();
+    const user = createUser("bothuser", "hash", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
+    updateTarget(user.id, 20);
+    logPushups(user.id, 25, "camera", "standard", "2026-04-06T14:00:00Z");
+
+    const originalFetch = globalThis.fetch;
+    const urls: string[] = [];
+    globalThis.fetch = mock(async (url: any, opts: any) => {
+      urls.push(url as string);
+      if ((url as string).includes("slack.com")) {
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }
+      return new Response(null, { status: 204 });
+    }) as any;
+
+    processExpiredBoundaries("2026-04-07T12:00:00Z");
+
+    expect(urls.length).toBe(2);
+    expect(urls.some(u => u.includes("slack.com"))).toBe(true);
+    expect(urls.some(u => u.includes("discord.com"))).toBe(true);
 
     globalThis.fetch = originalFetch;
   });
