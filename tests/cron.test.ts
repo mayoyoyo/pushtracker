@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, mock } from "bun:test";
-import { getDb, createUser, getUserById, logPushups, updateTarget, updateDebt } from "../src/db";
+import { getDb, createUser, getUserById, logPushups, updateTarget, updateDebt, linkAlias } from "../src/db";
 import { processExpiredBoundaries } from "../src/cron";
 
 describe("cron", () => {
@@ -109,6 +109,56 @@ describe("cron", () => {
     expect(calls[0].body.text).toContain("✅");
 
     globalThis.fetch = originalFetch;
+  });
+
+  test("alias row does not double-roll and fires its own org's slack post", async () => {
+    const db = getDb(":memory:");
+    // Configure slack ONLY on Frist so we can assert exactly one post.
+    db.exec("UPDATE invite_codes SET slack_bot_token = 'xoxb-fake', slack_channel = '#frist' WHERE code = 'FRST'");
+
+    const hanson = createUser("hanson", "h", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
+    const mayo = createUser("mayo", "h", "America/New_York", "2026-04-07T11:00:00.000Z", "FRST");
+    linkAlias(mayo.id, hanson.id);
+
+    updateTarget(hanson.id, 50);
+    logPushups(hanson.id, 60, "camera", "standard", "2026-04-06T14:00:00Z");
+
+    const calls: any[] = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (url: any, init: any) => {
+      calls.push({ url: String(url), body: JSON.parse(init?.body ?? "{}") });
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    }) as any;
+
+    try {
+      processExpiredBoundaries("2026-04-07T12:00:00.000Z");
+      // postDayResult is fire-and-forget in cron; flush microtasks so the
+      // stubbed fetch's promise chain completes before we assert.
+      await new Promise(r => setTimeout(r, 0));
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+
+    // Source row has rollup applied exactly once
+    const h = getUserById(hanson.id)!;
+    expect(h.debt).toBe(0);
+    expect(h.streak).toBe(1);
+    expect(h.next_day_boundary).toBe("2026-04-08T11:00:00.000Z");
+
+    // Alias row is untouched in debt/streak/last5/next_day_boundary
+    const m = getUserById(mayo.id)!;
+    expect(m.debt).toBe(0);
+    expect(m.streak).toBe(0);
+    expect(m.last5).toBe("");
+    expect(m.next_day_boundary).toBe("2026-04-07T11:00:00.000Z");
+
+    // Slack fired exactly once, with mayo's username, to Frist's channel
+    expect(calls.length).toBe(1);
+    expect(calls[0].url).toContain("chat.postMessage");
+    expect(calls[0].body.channel).toBe("#frist");
+    const blob = JSON.stringify(calls[0].body);
+    expect(blob).toContain("mayo");
+    expect(blob).not.toContain("\"hanson\"");
   });
 
   test("does not call Slack when team has no slack config", () => {

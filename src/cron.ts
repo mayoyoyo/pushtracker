@@ -1,4 +1,4 @@
-import { getUsersWithExpiredBoundary, getUserById, getTodayTotal, getTodayLogs, updateDebt, updateNextDayBoundary, updateStreak, saveDayResult, getSlackConfig, hasEverLoggedPushups } from "./db";
+import { getUsersWithExpiredBoundary, getUserById, getTodayTotal, getTodayLogs, updateDebt, updateNextDayBoundary, updateStreak, saveDayResult, getSlackConfig, hasEverLoggedPushups, getResolvedUserById } from "./db";
 import { advanceBoundary, getPreviousDayBoundary } from "./timezone";
 import { postDayResult } from "./slack";
 import { DateTime } from "luxon";
@@ -9,7 +9,43 @@ export function processExpiredBoundaries(nowUtc: string): void {
   let users = getUsersWithExpiredBoundary(nowUtc);
 
   while (users.length > 0) {
+    // Process sources before aliases so each alias sees the fresh source state.
+    users.sort((a, b) => {
+      const aIsAlias = a.source_user_id != null ? 1 : 0;
+      const bIsAlias = b.source_user_id != null ? 1 : 0;
+      return aIsAlias - bIsAlias;
+    });
+
     for (const user of users) {
+      if (user.source_user_id != null) {
+        // Alias branch: no rollup, no boundary advance — just fan out the org's Slack post.
+        const slackConfig = getSlackConfig(user.invite_code);
+        if (!slackConfig) continue;
+
+        const resolved = getResolvedUserById(user.id);
+        if (!resolved) continue;
+        if (!hasEverLoggedPushups(resolved.id)) continue;
+
+        const prevBoundary = getPreviousDayBoundary(resolved.timezone, resolved.next_day_boundary);
+        const todayTotal = getTodayTotal(resolved.id, prevBoundary, resolved.next_day_boundary);
+        const met = resolved.daily_target > 0 && todayTotal >= resolved.daily_target;
+        const dayDate = DateTime.fromISO(prevBoundary, { zone: 'utc' }).setZone(resolved.timezone).toISODate();
+        const formattedDate = DateTime.fromISO(dayDate!).toFormat("MMMM d, yyyy");
+        postDayResult(
+          slackConfig.slack_bot_token,
+          slackConfig.slack_channel,
+          user.username,
+          formattedDate,
+          todayTotal,
+          resolved.daily_target,
+          met,
+          resolved.streak,
+          resolved.debt,
+        ).catch(err => console.error(`Slack post failed for ${user.username}:`, err));
+        continue;
+      }
+
+      // Non-alias branch: existing rollup behavior.
       const nextBoundary = advanceBoundary(user.timezone, user.next_day_boundary);
 
       // Skip users who have never logged a pushup — no debt, no streak, no calendar
@@ -46,7 +82,7 @@ export function processExpiredBoundaries(nowUtc: string): void {
 
       // Save to day_results for calendar (date = the day that just ended)
       const dayDate = DateTime.fromISO(prevBoundary, { zone: 'utc' }).setZone(user.timezone).toISODate();
-      saveDayResult(user.id, dayDate, met, dayIcon === 'S' ? 'standard' : dayIcon === 'F' ? 'noob' : 'manual', todayTotal);
+      saveDayResult(user.id, dayDate!, met, dayIcon === 'S' ? 'standard' : dayIcon === 'F' ? 'noob' : 'manual', todayTotal);
 
       // Debt: add shortfall or reduce by surplus
       if (shortfall > 0) {
@@ -61,7 +97,7 @@ export function processExpiredBoundaries(nowUtc: string): void {
       // Post to Slack if team has it configured
       const slackConfig = getSlackConfig(user.invite_code);
       if (slackConfig) {
-        const formattedDate = DateTime.fromISO(dayDate).toFormat("MMMM d, yyyy");
+        const formattedDate = DateTime.fromISO(dayDate!).toFormat("MMMM d, yyyy");
         const updatedUser = getUserById(user.id)!;
         postDayResult(slackConfig.slack_bot_token, slackConfig.slack_channel, user.username, formattedDate, todayTotal, user.daily_target, met, newStreak, updatedUser.debt)
           .catch(err => console.error(`Slack post failed for ${user.username}:`, err));
