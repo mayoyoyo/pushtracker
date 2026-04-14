@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from "bun:test";
-import { getDb, createUser, getUserByUsername, getUserById, logPushups, getTodayLogs, getTeamByGroup, updateTarget, updateDebt, getGroupName, getDayHistory, getSlackConfig } from "../src/db";
+import { getDb, createUser, getUserByUsername, getUserById, logPushups, getTodayLogs, getTeamByGroup, updateTarget, updateDebt, getGroupName, getDayHistory, getSlackConfig, resolveDataUserId, linkAlias } from "../src/db";
 
 describe("database", () => {
   beforeEach(() => {
@@ -19,6 +19,25 @@ describe("database", () => {
     test("rejects duplicate username", () => {
       createUser("hanson", "hash1", "America/New_York", "2026-04-08T11:00:00Z", "DEV0");
       expect(() => createUser("hanson", "hash2", "America/New_York", "2026-04-08T11:00:00Z", "DEV0")).toThrow();
+    });
+  });
+
+  describe("resolveDataUserId", () => {
+    test("returns same id for a non-alias user", () => {
+      const user = createUser("hanson", "hash", "America/New_York", "2026-04-08T11:00:00Z", "DEV0");
+      expect(resolveDataUserId(user.id)).toBe(user.id);
+    });
+
+    test("returns source id for an alias user", () => {
+      const hanson = createUser("hanson", "hash", "America/New_York", "2026-04-08T11:00:00Z", "DEV0");
+      const mayo = createUser("mayo", "hash", "America/New_York", "2026-04-08T11:00:00Z", "FRST");
+      linkAlias(mayo.id, hanson.id);
+      expect(resolveDataUserId(mayo.id)).toBe(hanson.id);
+      expect(resolveDataUserId(hanson.id)).toBe(hanson.id);
+    });
+
+    test("returns passed id for a nonexistent user id", () => {
+      expect(resolveDataUserId(9999)).toBe(9999);
     });
   });
 

@@ -47,6 +47,8 @@ export function getDb(path: string = "pushtracker.db"): Database {
   // Slack integration columns on invite_codes
   try { db.exec("ALTER TABLE invite_codes ADD COLUMN slack_bot_token TEXT"); } catch {}
   try { db.exec("ALTER TABLE invite_codes ADD COLUMN slack_channel TEXT"); } catch {}
+  // User aliasing: source_user_id for marking alias users
+  try { db.exec("ALTER TABLE users ADD COLUMN source_user_id INTEGER REFERENCES users(id)"); } catch {}
   // Day results for calendar history
   db.exec(`CREATE TABLE IF NOT EXISTS day_results (
     user_id INTEGER NOT NULL REFERENCES users(id),
@@ -78,6 +80,7 @@ export interface User {
   created_at: string;
   last5: string;
   streak: number;
+  source_user_id: number | null;
 }
 
 export interface PushupLog {
@@ -91,6 +94,19 @@ export interface PushupLog {
 
 export function validateInviteCode(code: string): boolean {
   return db.prepare("SELECT 1 FROM invite_codes WHERE code = ?").get(code) !== null;
+}
+
+export function resolveDataUserId(userId: number): number {
+  const row = db.prepare(
+    "SELECT source_user_id FROM users WHERE id = ?"
+  ).get(userId) as { source_user_id: number | null } | null;
+  return row?.source_user_id ?? userId;
+}
+
+// Test helper and migration primitive: mark `aliasId` as an alias of `sourceId`.
+// Callers in production code go through the one-time username-based migration.
+export function linkAlias(aliasId: number, sourceId: number): void {
+  db.prepare("UPDATE users SET source_user_id = ? WHERE id = ?").run(sourceId, aliasId);
 }
 
 export function createUser(username: string, passcode: string, timezone: string, nextDayBoundary: string, inviteCode: string): User {
