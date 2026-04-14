@@ -65,9 +65,9 @@ function drawSkeleton(ctx, landmarks) {
 }
 
 // ============================================================
-// NOOB MODE — Front-facing, nose/shoulder dip + elbow + wrist
+// STANDARD MODE — Front-facing, nose/shoulder dip + elbow + wrist
 // ============================================================
-function startNoobTracking(video, canvas, onCount, onDebug) {
+function startStandardTracking(video, canvas, onCount, onDebug) {
   const ctx = canvas.getContext('2d');
   let count = 0, tracking = false, frameNum = 0;
   const noseYBuf = [], shoulderYBuf = [], elbowBuf = [];
@@ -79,7 +79,7 @@ function startNoobTracking(video, canvas, onCount, onDebug) {
   const eventLog = [];
   function log(type, data) { eventLog.push({ t: (performance.now()/1000).toFixed(2), frame: frameNum, type, ...data }); if (eventLog.length > 200) eventLog.shift(); }
 
-  function noobLandmarksVisible(lm) {
+  function standardLandmarksVisible(lm) {
     const noseVis = lm[0].visibility;
     // Require at least one full arm (shoulder+elbow+wrist) visible
     const lArmVis = Math.min(lm[11].visibility, lm[13].visibility, lm[15].visibility);
@@ -108,7 +108,7 @@ function startNoobTracking(video, canvas, onCount, onDebug) {
           log('PAUSED', { reason: 'landmarks-lost' });
         }
       }
-      if (onDebug) onDebug({ phase, count, gated: gateState === 'READY' ? 'pausing' : 'no-pose', mode: 'NOOB' });
+      if (onDebug) onDebug({ phase, count, gated: gateState === 'READY' ? 'pausing' : 'no-pose', mode: 'STANDARD' });
       animationFrameId = requestAnimationFrame(processFrame);
       return;
     }
@@ -119,7 +119,7 @@ function startNoobTracking(video, canvas, onCount, onDebug) {
 
     // --- READY GATE ---
     if (gateState === 'NOT_READY') {
-      if (noobLandmarksVisible(lm)) {
+      if (standardLandmarksVisible(lm)) {
         gateFrames++;
       } else {
         gateFrames = 0;
@@ -131,7 +131,7 @@ function startNoobTracking(video, canvas, onCount, onDebug) {
       const rArmOk = Math.min(lm[12].visibility, lm[14].visibility, lm[16].visibility) > MIN_VISIBILITY;
       if (!lArmOk && !rArmOk) missing.push('arms');
 
-      if (onDebug) onDebug({ gateProgress: `${gateFrames}/${READY_FRAMES_NEEDED}`, missing: missing.join(',') || 'none', phase: 'SETUP', count, gated: 'not-ready', mode: 'NOOB' });
+      if (onDebug) onDebug({ gateProgress: `${gateFrames}/${READY_FRAMES_NEEDED}`, missing: missing.join(',') || 'none', phase: 'SETUP', count, gated: 'not-ready', mode: 'STANDARD' });
 
       if (gateFrames >= READY_FRAMES_NEEDED) {
         gateState = 'READY';
@@ -146,7 +146,7 @@ function startNoobTracking(video, canvas, onCount, onDebug) {
     }
 
     // --- TRACKING (gate is READY) ---
-    if (!noobLandmarksVisible(lm)) {
+    if (!standardLandmarksVisible(lm)) {
       lostFrames++;
       if (lostFrames >= LOST_FRAMES_THRESHOLD) {
         gateState = 'NOT_READY';
@@ -157,7 +157,7 @@ function startNoobTracking(video, canvas, onCount, onDebug) {
         playTone(330, 0.3);
         log('PAUSED', { reason: 'landmarks-lost' });
       }
-      if (onDebug) onDebug({ phase, count, gated: 'losing-landmarks', mode: 'NOOB' });
+      if (onDebug) onDebug({ phase, count, gated: 'losing-landmarks', mode: 'STANDARD' });
       animationFrameId = requestAnimationFrame(processFrame);
       return;
     }
@@ -190,7 +190,7 @@ function startNoobTracking(video, canvas, onCount, onDebug) {
     let wVar = '--';
     if (wristSamples.length >= 3) { const m = wristSamples.reduce((a,b)=>a+b,0)/wristSamples.length; wVar = Math.sqrt(wristSamples.reduce((s,v)=>s+(v-m)**2,0)/wristSamples.length).toFixed(4); }
 
-    if (onDebug) onDebug({ noseDip: noseDip.toFixed(3), shoulderDip: shoulderDip.toFixed(3), elbow: elbow ?? '--', minElbow: phase !== 'READY' ? minElbow : '--', wVar, phase, count, gated: 'active', mode: 'NOOB', depth: Math.min(1, Math.max(0, noseDip / (MIN_DIP * 1.5))), depthThreshold: 1 / 1.5 });
+    if (onDebug) onDebug({ noseDip: noseDip.toFixed(3), shoulderDip: shoulderDip.toFixed(3), elbow: elbow ?? '--', minElbow: phase !== 'READY' ? minElbow : '--', wVar, phase, count, gated: 'active', mode: 'STANDARD', depth: Math.min(1, Math.max(0, noseDip / (MIN_DIP * 1.5))), depthThreshold: 1 / 1.5 });
 
     if (phase === 'READY') {
       noseBaseY = nY * 0.05 + noseBaseY * 0.95;
@@ -238,9 +238,9 @@ function startNoobTracking(video, canvas, onCount, onDebug) {
 }
 
 // ============================================================
-// STANDARD MODE — Side view, elbow angle + body alignment + no kneeling
+// OPM MODE — Side view, elbow angle + body alignment + no kneeling
 // ============================================================
-function startStandardTracking(video, canvas, onCount, onDebug) {
+function startOpmTracking(video, canvas, onCount, onDebug) {
   const ctx = canvas.getContext('2d');
   let count = 0, tracking = false, frameNum = 0;
   const shoulderYBuf = [];
@@ -306,7 +306,7 @@ function startStandardTracking(video, canvas, onCount, onDebug) {
           log('PAUSED', { reason: 'landmarks-lost' });
         }
       }
-      if (onDebug) onDebug({ phase, count, gated: gateState === 'READY' ? 'pausing' : 'no-pose', mode: 'STANDARD' });
+      if (onDebug) onDebug({ phase, count, gated: gateState === 'READY' ? 'pausing' : 'no-pose', mode: 'OPM' });
       animationFrameId = requestAnimationFrame(processFrame);
       return;
     }
@@ -330,7 +330,7 @@ function startStandardTracking(video, canvas, onCount, onDebug) {
       if (side.knee.visibility <= MIN_VISIBILITY) missing.push('knee');
       if (side.ankle.visibility <= MIN_VISIBILITY) missing.push('ankle');
 
-      if (onDebug) onDebug({ gateProgress: `${gateFrames}/${READY_FRAMES_NEEDED}`, missing: missing.join(',') || 'none', phase: 'SETUP', count, gated: 'not-ready', mode: 'STANDARD' });
+      if (onDebug) onDebug({ gateProgress: `${gateFrames}/${READY_FRAMES_NEEDED}`, missing: missing.join(',') || 'none', phase: 'SETUP', count, gated: 'not-ready', mode: 'OPM' });
 
       if (gateFrames >= READY_FRAMES_NEEDED) {
         gateState = 'READY';
@@ -359,7 +359,7 @@ function startStandardTracking(video, canvas, onCount, onDebug) {
         playTone(330, 0.3);
         log('PAUSED', { reason: 'landmarks-lost' });
       }
-      if (onDebug) onDebug({ phase, count, gated: 'losing-landmarks', mode: 'STANDARD' });
+      if (onDebug) onDebug({ phase, count, gated: 'losing-landmarks', mode: 'OPM' });
       animationFrameId = requestAnimationFrame(processFrame);
       return;
     }
@@ -380,7 +380,7 @@ function startStandardTracking(video, canvas, onCount, onDebug) {
     let ankleVar = '--';
     if (ankleYSamples.length >= 3) { const m = ankleYSamples.reduce((a,b)=>a+b,0)/ankleYSamples.length; ankleVar = Math.sqrt(ankleYSamples.reduce((s,v)=>s+(v-m)**2,0)/ankleYSamples.length).toFixed(4); }
 
-    if (onDebug) onDebug({ sDip: shoulderDip.toFixed(3), ankleVar, kneeAng: kAngle !== null ? Math.round(kAngle) : '--', phase, count, gated: 'active', mode: 'STANDARD', depth: Math.min(1, Math.max(0, shoulderDip / (MIN_DIP * 1.5))), depthThreshold: 1 / 1.5 });
+    if (onDebug) onDebug({ sDip: shoulderDip.toFixed(3), ankleVar, kneeAng: kAngle !== null ? Math.round(kAngle) : '--', phase, count, gated: 'active', mode: 'OPM', depth: Math.min(1, Math.max(0, shoulderDip / (MIN_DIP * 1.5))), depthThreshold: 1 / 1.5 });
 
     // --- PHASE MACHINE ---
     if (phase === 'READY') {
@@ -801,10 +801,10 @@ function startSitupTracking(video, canvas, onCount, onDebug) {
 // ============================================================
 // Public API
 // ============================================================
-export function startTracking(video, canvas, onCount, onDebug, mode = 'noob') {
+export function startTracking(video, canvas, onCount, onDebug, mode = 'standard') {
   if (mode === 'situp') return startSitupTracking(video, canvas, onCount, onDebug);
-  if (mode === 'standard') return startStandardTracking(video, canvas, onCount, onDebug);
-  return startNoobTracking(video, canvas, onCount, onDebug);
+  if (mode === 'opm') return startOpmTracking(video, canvas, onCount, onDebug);
+  return startStandardTracking(video, canvas, onCount, onDebug);
 }
 
 export async function getCamera(facingMode = 'user') {

@@ -49,7 +49,7 @@ function streakIcons(last5days) {
   if (!last5days || !last5days.length) return '';
   return last5days.map(d => {
     if (!d.met) return '🧊';
-    if (d.mode === 'standard') return '<img src="/opm-fist.png" style="width:22px;height:22px;vertical-align:middle">';
+    if (d.mode === 'opm') return '<img src="/opm-fist.png" style="width:22px;height:22px;vertical-align:middle">';
     if (d.mode === 'situp') return '💪';
     return '🔥';
   }).join('');
@@ -221,7 +221,7 @@ async function renderCalendar(container, userData) {
       const entry = dayMap[d];
       let icon = '';
       const metIcon = (mode) => {
-        if (mode === 'standard') return '<img src="/opm-fist.png" style="width:14px;height:14px">';
+        if (mode === 'opm') return '<img src="/opm-fist.png" style="width:14px;height:14px">';
         if (mode === 'situp') return '💪';
         return '🔥';
       };
@@ -317,54 +317,54 @@ function renderDashboard(app, data) {
     const debtFullyPaid = debtCovered > 0 && debtCovered >= data.debt;
     const remainingDebt = Math.max(0, data.debt - debtCovered);
 
-    // Mode breakdown for the segmented progress bar. Manual rolls into noob,
+    // Mode breakdown for the segmented progress bar. Manual rolls into standard,
     // matching the cron's day-icon "other" bucket (src/day-icon.ts).
-    const byMode = data.today_by_mode || { standard: 0, situp: 0, noob: 0 };
-    const totalReps = byMode.standard + byMode.situp + byMode.noob;
+    const byMode = data.today_by_mode || { opm: 0, situp: 0, standard: 0 };
+    const totalReps = byMode.opm + byMode.situp + byMode.standard;
     const hasAnyReps = totalReps > 0;
     // Segment widths are proportional to target. Scale down if total > target.
     const tgt = data.daily_target || 1;
-    let stdW = (byMode.standard / tgt) * 100;
+    let opmW = (byMode.opm / tgt) * 100;
     let situpW = (byMode.situp / tgt) * 100;
-    let otherW = (byMode.noob / tgt) * 100;
-    const sumW = stdW + situpW + otherW;
+    let stdW = (byMode.standard / tgt) * 100;
+    const sumW = opmW + situpW + stdW;
     if (sumW > 100) {
       const k = 100 / sumW;
-      stdW *= k; situpW *= k; otherW *= k;
+      opmW *= k; situpW *= k; stdW *= k;
     }
     const segmentedBar = `
       <div class="progress-bar progress-bar-segmented">
-        ${stdW   > 0 ? `<div class="seg seg-std"   style="width:${stdW}%"></div>`   : ''}
+        ${opmW   > 0 ? `<div class="seg seg-opm"   style="width:${opmW}%"></div>`   : ''}
         ${situpW > 0 ? `<div class="seg seg-situp" style="width:${situpW}%"></div>` : ''}
-        ${otherW > 0 ? `<div class="seg seg-other" style="width:${otherW}%"></div>` : ''}
+        ${stdW   > 0 ? `<div class="seg seg-std"   style="width:${stdW}%"></div>`   : ''}
       </div>
     `;
 
     // Percentages for the breakdown view (relative to total reps done today).
     const pctOf = (n) => totalReps > 0 ? Math.round((n / totalReps) * 100) : 0;
     const modeRows = [
-      { key: 'std',   label: 'One Punch', count: byMode.standard, pct: pctOf(byMode.standard) },
+      { key: 'opm',   label: 'One Punch', count: byMode.opm,      pct: pctOf(byMode.opm) },
       { key: 'situp', label: 'Sit-up',    count: byMode.situp,    pct: pctOf(byMode.situp) },
-      { key: 'other', label: 'Noob',      count: byMode.noob,     pct: pctOf(byMode.noob) },
+      { key: 'std',   label: 'Standard',  count: byMode.standard, pct: pctOf(byMode.standard) },
     ].filter(m => m.count > 0).sort((a, b) => b.count - a.count);
 
     // Plurality-winning mode. Same rule as src/day-icon.ts pickDayIcon: most
-    // reps wins, ties break toward the harder mode (standard > situp > other).
+    // reps wins, ties break toward the harder mode (opm > situp > standard).
     // This drives the completion border color so the card theme matches
     // whichever mode dominated the day.
     const pluralityKey = (() => {
-      const max = Math.max(byMode.standard, byMode.situp, byMode.noob);
-      if (byMode.standard === max) return 'std';
-      if (byMode.situp === max)    return 'situp';
-      return 'other';
+      const max = Math.max(byMode.opm, byMode.situp, byMode.standard);
+      if (byMode.opm === max) return 'opm';
+      if (byMode.situp === max) return 'situp';
+      return 'std';
     })();
     // Palette for the completed state. `rgb` is the raw channel triplet so the
     // box-shadow glow can be built with rgba(...) at low alpha.
     const completedStyles = done ? (() => {
       const palette = {
-        std:   { color: 'var(--one-punch)', rgb: '245,132,38'  },
+        opm:   { color: 'var(--one-punch)', rgb: '245,132,38'  },
         situp: { color: 'var(--info)',      rgb: '59,130,246'  },
-        other: { color: 'var(--primary)',   rgb: '250,250,250' },
+        std:   { color: 'var(--primary)',   rgb: '250,250,250' },
       }[pluralityKey];
       return {
         card:  `border-color:${palette.color};box-shadow:0 0 20px rgba(${palette.rgb},0.15),0 0 60px rgba(${palette.rgb},0.05)`,
@@ -637,7 +637,7 @@ function showSettings() {
   overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 }
 
-let cameraMode = 'noob'; // 'noob' or 'standard'
+let cameraMode = 'standard'; // 'standard', 'opm', or 'situp'
 
 function getModeContent(mode) {
   if (mode === 'situp') return `
@@ -658,7 +658,7 @@ function getModeContent(mode) {
     </div>
     <p style="font-size:11px;color:var(--text-muted);line-height:1.5;padding:0 4px">Sit-up Mode tracks your spine angle — from lying flat to sitting up. Full range of motion is required for each rep to count. Same daily target as pushups.</p>`;
 
-  if (mode === 'standard') return `
+  if (mode === 'opm') return `
     <div style="text-align:center;margin-bottom:20px">
       <img src="/opm-fist.png" style="width:48px;height:48px">
       <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Streak icon</div>
@@ -683,7 +683,7 @@ function getModeContent(mode) {
     </div>
     <div style="font-weight:600;margin-bottom:10px;font-size:16px;text-align:center">Setup in 3 steps:</div>
     <div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:16px">
-      <img src="/setup-noob.png" style="width:110px;flex-shrink:0;border-radius:10px;object-fit:contain">
+      <img src="/setup-standard.png" style="width:110px;flex-shrink:0;border-radius:10px;object-fit:contain">
       <div style="flex:1">
         <div style="display:flex;flex-direction:column;gap:12px;font-size:13px;margin-top:14px">
           <div style="display:flex;gap:8px;align-items:flex-start"><span style="font-weight:700;color:var(--primary);font-size:16px">1</span><div><strong style="color:var(--text)">Face the camera</strong><br><span style="color:var(--text-dim)">Place phone on the floor in front of you</span></div></div>
@@ -692,16 +692,16 @@ function getModeContent(mode) {
         </div>
       </div>
     </div>
-    <p style="font-size:11px;color:var(--text-muted);line-height:1.5;padding:0 4px">Noob Mode only tracks your upper body — it can't tell if you're on your knees or doing full push-ups. Great for getting started, but it won't catch shortcuts.</p>`;
+    <p style="font-size:11px;color:var(--text-muted);line-height:1.5;padding:0 4px">Standard Mode only tracks your upper body — it can't tell if you're on your knees or doing full push-ups. Great for getting started, but it won't catch shortcuts.</p>`;
 }
 
 function showTutorial(onStart) {
   const app = document.getElementById('app');
-  const isStd = cameraMode === 'standard';
+  const isOpm = cameraMode === 'opm';
   const isSitup = cameraMode === 'situp';
-  const title = isStd ? 'One Punch Mode' : isSitup ? 'Sit-up Mode' : 'Noob Mode';
-  const titleColor = isStd ? 'color:var(--one-punch)' : isSitup ? 'color:var(--info)' : '';
-  const btnClass = isStd ? 'btn-one-punch' : isSitup ? 'btn-info' : 'btn-primary';
+  const title = isOpm ? 'One Punch Mode' : isSitup ? 'Sit-up Mode' : 'Standard Mode';
+  const titleColor = isOpm ? 'color:var(--one-punch)' : isSitup ? 'color:var(--info)' : '';
+  const btnClass = isOpm ? 'btn-one-punch' : isSitup ? 'btn-info' : 'btn-primary';
 
   app.innerHTML = `
     <div class="camera-screen" style="background:var(--bg);overflow-y:auto">
@@ -710,8 +710,8 @@ function showTutorial(onStart) {
         <h2 style="text-align:center;margin-bottom:8px;${titleColor}">${title}</h2>
         <div style="display:flex;justify-content:center;margin-bottom:16px">
           <div style="display:inline-flex;background:var(--surface-2);border-radius:8px;overflow:hidden">
-            <button id="mode-noob" style="padding:8px 14px;border:none;font-size:13px;font-weight:500;cursor:pointer;background:${!isStd && !isSitup ? 'var(--primary)' : 'transparent'};color:${!isStd && !isSitup ? 'var(--primary-fg)' : 'var(--text)'}">Noob</button>
-            <button id="mode-std" style="padding:8px 14px;border:none;font-size:13px;font-weight:500;cursor:pointer;background:${isStd ? 'var(--one-punch)' : 'transparent'};color:${isStd ? '#fff' : 'var(--text)'}">One Punch</button>
+            <button id="mode-std" style="padding:8px 14px;border:none;font-size:13px;font-weight:500;cursor:pointer;background:${!isOpm && !isSitup ? 'var(--primary)' : 'transparent'};color:${!isOpm && !isSitup ? 'var(--primary-fg)' : 'var(--text)'}">Standard</button>
+            <button id="mode-opm" style="padding:8px 14px;border:none;font-size:13px;font-weight:500;cursor:pointer;background:${isOpm ? 'var(--one-punch)' : 'transparent'};color:${isOpm ? '#fff' : 'var(--text)'}">One Punch</button>
             <button id="mode-situp" style="padding:8px 14px;border:none;font-size:13px;font-weight:500;cursor:pointer;background:${isSitup ? 'var(--info)' : 'transparent'};color:${isSitup ? '#fff' : 'var(--text)'}">Sit-up</button>
           </div>
         </div>
@@ -724,8 +724,8 @@ function showTutorial(onStart) {
   `;
 
   initIcons();
-  document.getElementById('mode-noob').addEventListener('click', () => { cameraMode = 'noob'; showTutorial(onStart); });
   document.getElementById('mode-std').addEventListener('click', () => { cameraMode = 'standard'; showTutorial(onStart); });
+  document.getElementById('mode-opm').addEventListener('click', () => { cameraMode = 'opm'; showTutorial(onStart); });
   document.getElementById('mode-situp').addEventListener('click', () => { cameraMode = 'situp'; showTutorial(onStart); });
   document.getElementById('tut-start').addEventListener('click', onStart);
   document.getElementById('tut-back').addEventListener('click', () => loadDashboard());
@@ -744,9 +744,9 @@ async function renderCamera(app) {
     let timerInterval = null;
 
     // Stop & Save follows the active mode color so the whole screen reads as one
-    // palette. Noob maps to btn-primary (white bg / dark text) — still high
+    // palette. Standard maps to btn-primary (white bg / dark text) — still high
     // contrast over the camera feed's dark gradient, and matches the mode-select.
-    const stopBtnClass = mode === 'standard' ? 'btn-one-punch'
+    const stopBtnClass = mode === 'opm' ? 'btn-one-punch'
       : mode === 'situp' ? 'btn-info'
       : 'btn-primary';
 
@@ -763,7 +763,7 @@ async function renderCamera(app) {
         </div>
         <div id="cam-debug-panel" style="background:rgba(0,0,0,0.85);padding:8px 12px;font-family:monospace;font-size:11px;line-height:1.6;color:#e2e8f0">
           <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:4px">
-            <span style="color:${mode === 'standard' ? 'var(--one-punch)' : mode === 'situp' ? 'var(--info)' : 'var(--primary)'};font-weight:bold">${mode === 'standard' ? 'STANDARD' : mode === 'situp' ? 'SITUP' : 'NOOB'}</span>
+            <span style="color:${mode === 'opm' ? 'var(--one-punch)' : mode === 'situp' ? 'var(--info)' : 'var(--primary)'};font-weight:bold">${mode === 'opm' ? 'OPM' : mode === 'situp' ? 'SITUP' : 'STANDARD'}</span>
             <span>d1: <strong id="d-f1" style="color:#ecc94b">--</strong></span>
             <span>d2: <strong id="d-f2" style="color:#63b3ed">--</strong></span>
             <span>d3: <strong id="d-f3" style="color:#48bb78">--</strong></span>
@@ -793,8 +793,8 @@ async function renderCamera(app) {
           <canvas id="cam-canvas"></canvas>
           <div style="position:absolute;top:16px;right:16px;display:flex;gap:8px;align-items:center">
             <div style="background:rgba(0,0,0,0.5);backdrop-filter:blur(8px);border-radius:20px;padding:6px 12px;font-size:12px;font-weight:600;color:#fff;display:flex;align-items:center;gap:6px">
-              ${mode === 'standard' ? '<img src="/opm-fist.png" style="width:14px;height:14px">' : mode === 'situp' ? '<span style="font-size:12px">💪</span>' : '<i data-lucide="user" style="width:14px;height:14px"></i>'}
-              ${mode === 'standard' ? 'One Punch' : mode === 'situp' ? 'Sit-up' : 'Noob'}
+              ${mode === 'opm' ? '<img src="/opm-fist.png" style="width:14px;height:14px">' : mode === 'situp' ? '<span style="font-size:12px">💪</span>' : '<i data-lucide="user" style="width:14px;height:14px"></i>'}
+              ${mode === 'opm' ? 'One Punch' : mode === 'situp' ? 'Sit-up' : 'Standard'}
             </div>
             <button class="prod-btn" id="cam-help" title="Help">?</button>
           </div>
@@ -803,7 +803,7 @@ async function renderCamera(app) {
             <div id="depth-fill" style="position:absolute;bottom:0;left:0;right:0;height:0%;background:#ef4444;transition:height 0.05s,background 0.1s;border-radius:0 0 5px 5px"></div>
           </div>
           <div id="cam-gate-msg" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:#fff;font-size:16px;font-weight:600;text-shadow:0 2px 8px rgba(0,0,0,0.8);pointer-events:none">
-            ${mode === 'standard' ? 'Stand sideways to the camera' : mode === 'situp' ? 'Lie down in view of the camera' : 'Face the camera'}...
+            ${mode === 'situp' ? 'Lie down in view of the camera' : 'Face the camera'}...
           </div>
           <div id="cam-congrats" style="display:none;position:absolute;top:30%;left:50%;transform:translate(-50%,-50%);text-align:center;color:#fff;pointer-events:none">
             <div style="font-size:24px;font-weight:700;text-shadow:0 2px 8px rgba(0,0,0,0.8)">Daily complete!</div>
@@ -857,7 +857,7 @@ async function renderCamera(app) {
         }
       }, (d) => {
         if (DEV_VIEW) {
-          if (mode === 'standard') {
+          if (mode === 'opm') {
             document.getElementById('d-f1').textContent = 'sDip:' + (d.sDip ?? '--');
             document.getElementById('d-f2').textContent = 'aVar:' + (d.ankleVar ?? '--');
             document.getElementById('d-f3').textContent = 'knee:' + (d.kneeAng ?? '--');
@@ -890,9 +890,7 @@ async function renderCamera(app) {
             if (d.gateProgress) {
               gateMsg.textContent = 'Hold still...';
             } else if (missing && missing !== 'none') {
-              gateMsg.textContent = mode === 'standard' ? 'Stand sideways to the camera'
-                : mode === 'situp' ? 'Lie down in view of the camera'
-                : 'Face the camera';
+              gateMsg.textContent = mode === 'situp' ? 'Lie down in view of the camera' : 'Face the camera';
             } else {
               gateMsg.textContent = 'Looking for you...';
             }
@@ -959,7 +957,7 @@ async function renderCamera(app) {
       helpOverlay.innerHTML = `
         <div style="padding:24px 20px;max-width:400px;width:100%;position:relative;margin-top:20px">
           <button id="help-close" style="position:absolute;top:0;right:0;background:none;border:none;color:var(--text-dim);cursor:pointer;padding:8px;font-size:20px">&times;</button>
-          <h2 style="text-align:center;margin-bottom:16px;${mode === 'standard' ? 'color:var(--one-punch)' : mode === 'situp' ? 'color:var(--info)' : ''}">${mode === 'standard' ? 'One Punch Mode' : mode === 'situp' ? 'Sit-up Mode' : 'Noob Mode'}</h2>
+          <h2 style="text-align:center;margin-bottom:16px;${mode === 'opm' ? 'color:var(--one-punch)' : mode === 'situp' ? 'color:var(--info)' : ''}">${mode === 'opm' ? 'One Punch Mode' : mode === 'situp' ? 'Sit-up Mode' : 'Standard Mode'}</h2>
           ${getModeContent(mode)}
         </div>
       `;
