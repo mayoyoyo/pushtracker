@@ -27,7 +27,7 @@ export async function initPoseDetection() {
   );
   poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
     baseOptions: {
-      modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
+      modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task',
       delegate: 'GPU',
     },
     runningMode: 'VIDEO',
@@ -443,9 +443,366 @@ function startStandardTracking(video, canvas, onCount, onDebug) {
 }
 
 // ============================================================
+// SITUP MODE — Spine angle from flat, via rotated-frame pose estimation
+// ============================================================
+// Signal design: a 2-point vector angle between the shoulders and the hips. The
+// shoulder-hip vector is mathematically stable (no degeneracy), unlike 3-point
+// angles which the MDPI study flagged as unreliable on supine subjects. We
+// measure the angle between this vector and the body's long axis (the y-axis
+// of the rotated frame, since MediaPipe sees a 90°-rotated input where the
+// head is at one end of the y-axis and feet at the other). Flat = 0°, fully
+// upright = 90°. This is a POSTURE signal — it doesn't care where the body is
+// in the frame, only how curled up the torso is, which is what a situp IS.
+//
+// Baseline is clamped to [0°, MAX_BASELINE_ANGLE] so "rest" always means "near
+// flat" — the user can't slowly drift into a half-curled resting posture and
+// then get credit for small motions from that corrupted baseline.
+function startSitupTracking(video, canvas, onCount, onDebug) {
+  const ctx = canvas.getContext('2d');
+
+  // Offscreen processing canvas — the video is rotated 90° into this canvas
+  // before being passed to MediaPipe. MediaPipe is trained almost entirely on
+  // upright humans and its body-model fitting fails unreliably on supine
+  // subjects that appear horizontally in the frame. Rotating the input so the
+  // user appears vertical (head at top, feet at bottom) restores reliable
+  // landmark detection. The visible video element stays in its native
+  // landscape orientation — only the input to MediaPipe is rotated.
+  const procCanvas = document.createElement('canvas');
+  const procCtx = procCanvas.getContext('2d');
+
+  let count = 0, tracking = false, frameNum = 0;
+  const signalBuf = [];
+
+  // Thresholds — signal is spine angle in DEGREES (0° flat, 90° fully upright)
+  const MIN_LIFT = 40;                    // minimum peak angle change to count a rep (40° from rest)
+  const MIN_FRAMES = 10;                  // minimum frames between rep-start and count
+  const MAX_BASELINE_ANGLE = 15;          // rest baseline is clamped to [0°, 15°] — forces "rest = near flat"
+  // Knee-lock check DISABLED. MediaPipe's knee landmark is unreliable on supine bodies —
+  // observed knee jitter of 30%+ of image height. The check false-rejects real reps.
+  // Keeping the accumulator for debug logs but gating on Infinity so it never triggers.
+  const MAX_KNEE_LIFT_DELTA = Infinity;
+  const ACTIVE_TIMEOUT_FRAMES = 900;      // ~7.5s — full rep up and back down
+  const RETURN_TOLERANCE = 5;             // spine must return to within 5° of baseline to count
+  const READY_FRAMES_NEEDED = 30;
+  const LOST_FRAMES_THRESHOLD = 60;       // 0.5s grace for brief landmark occlusions
+
+  // Ready gate state
+  let gateState = 'NOT_READY';
+  let gateFrames = 0;
+  let lostFrames = 0;
+
+  // Tracking state. Single active phase: rep starts when spine angle exceeds
+  // half-threshold from baseline, tracks peak, and COUNTs when the angle
+  // returns within RETURN_TOLERANCE of baseline. The baseline is never reset
+  // on count and is clamped to [0°, MAX_BASELINE_ANGLE] so rest always means
+  // "near flat" — this prevents the user from slowly drifting into a curled
+  // rest posture and getting credit for partial-range motions.
+  let phase = 'READY'; // READY | ACTIVE
+  let baselineAngle = 0;  // degrees, clamped to [0, MAX_BASELINE_ANGLE]
+  let peakDevMag = 0;     // max (smoothedAngle - baselineAngle) during current rep, in degrees
+  let activeStartFrame = 0;
+  let startKneeLift = null;
+  let kneeLiftDeltaMax = 0;
+
+  // Debug instrumentation
+  let maxDevSinceGate = 0;
+  let lastTrackLogFrame = 0;
+  const TRACK_LOG_INTERVAL = 30;
+
+  // Baseline adapts only when the signal is very close to baseline — frozen
+  // during motion. Must be tighter than the EMA's steady-state lag so freeze
+  // kicks in quickly once a rep starts.
+  const BASELINE_ADAPT_WINDOW = 2;  // degrees
+
+  const eventLog = [];
+  function log(type, data) { eventLog.push({ t: (performance.now()/1000).toFixed(2), frame: frameNum, type, ...data }); if (eventLog.length > 200) eventLog.shift(); }
+
+  // Spine angle in DEGREES, computed from the shoulder→hip vector in the
+  // rotated frame. When flat, the body's long axis is parallel to the rotated
+  // frame's y-axis (head at one end, feet at the other), so dx ≈ 0 and |dy|
+  // is large → angle ≈ 0°. When sitting upright, shoulders rotate away from
+  // the hips' y-axis, so |dx| grows and |dy| shrinks → angle → 90°. We use
+  // absolute values of both components so the signal is direction-agnostic:
+  // it doesn't matter which side the user is lying on, which side they lean
+  // toward when sitting, or which way the frame was rotated.
+  function computeSpineAngle(lm) {
+    const shoulderX = (lm[11].x + lm[12].x) / 2;
+    const shoulderY = (lm[11].y + lm[12].y) / 2;
+    const hipX = (lm[23].x + lm[24].x) / 2;
+    const hipY = (lm[23].y + lm[24].y) / 2;
+    const dx = shoulderX - hipX;
+    const dy = shoulderY - hipY;
+    return Math.atan2(Math.abs(dx), Math.abs(dy)) * 180 / Math.PI;
+  }
+
+  function computeKneeLift(lm) {
+    // knee elevation above hip. Used for leg-lock cheat detection via delta-during-rep.
+    const hipY = (lm[23].y + lm[24].y) / 2;
+    const kneeY = (lm[25].y + lm[26].y) / 2;
+    return hipY - kneeY;
+  }
+
+  function landmarksVisible(lm) {
+    // Only require shoulders and hips for the gate. Knees aren't needed
+    // because the knee-lock form check is disabled. Reducing the gate from
+    // 6 landmarks to 4 dramatically cuts gate drops during real reps.
+    return lm[11].visibility > MIN_VISIBILITY
+      && lm[12].visibility > MIN_VISIBILITY
+      && lm[23].visibility > MIN_VISIBILITY
+      && lm[24].visibility > MIN_VISIBILITY;
+  }
+
+  // Median filter — a 15-frame median is immune to single-frame spikes.
+  const SIGNAL_MEDIAN_WINDOW = 15;
+  function smoothMedian(newValue) {
+    signalBuf.push(newValue);
+    if (signalBuf.length > SIGNAL_MEDIAN_WINDOW) signalBuf.shift();
+    const sorted = [...signalBuf].sort((a, b) => a - b);
+    return sorted[Math.floor(sorted.length / 2)];
+  }
+
+  function clampBaseline(angle) {
+    return Math.max(0, Math.min(MAX_BASELINE_ANGLE, angle));
+  }
+
+  function processFrame() {
+    if (!poseLandmarker || video.paused || video.ended) { animationFrameId = requestAnimationFrame(processFrame); return; }
+    frameNum++;
+
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    if (!vw || !vh) {
+      animationFrameId = requestAnimationFrame(processFrame);
+      return;
+    }
+
+    // Rotate the video 90° COUNTER-clockwise into an offscreen processing
+    // canvas. Dimensions are swapped — a landscape 1280×720 source becomes
+    // a portrait 720×1280. MediaPipe sees this rotated image internally. The
+    // visible video stays in its native landscape orientation.
+    //
+    // Direction (CCW vs CW) matters because it determines which side of the
+    // original landscape ends up at the top of the rotated portrait. Counter-
+    // clockwise puts the RIGHT side of the original at the TOP of the rotated
+    // frame. That matches a user lying with their head on the right side of
+    // the camera (laptop webcam perspective). If the user lies with head on
+    // the left, CW would be correct — we'd detect that by observing signal
+    // direction during real reps (negative = wrong rotation, flip direction).
+    procCanvas.width = vh;
+    procCanvas.height = vw;
+    procCtx.save();
+    procCtx.translate(0, vw);
+    procCtx.rotate(-Math.PI / 2);
+    procCtx.drawImage(video, 0, 0, vw, vh);
+    procCtx.restore();
+
+    // Visible canvas is landscape, matching the native video. The skeleton
+    // will be drawn here after transforming landmarks back from rotated space.
+    canvas.width = vw;
+    canvas.height = vh;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // MediaPipe processes the rotated image. Landmarks come back in the
+    // rotated coordinate space where y increases from head (top) to feet
+    // (bottom) in that frame. Signal computations use these rotated coords
+    // directly. Skeleton drawing needs un-rotated coords (see below).
+    const result = poseLandmarker.detectForVideo(procCanvas, performance.now());
+
+    if (!result.landmarks || result.landmarks.length === 0) {
+      tracking = false;
+      if (gateState === 'READY') {
+        lostFrames++;
+        if (lostFrames >= LOST_FRAMES_THRESHOLD) {
+          gateState = 'NOT_READY';
+          gateFrames = 0;
+          phase = 'READY';
+          signalBuf.length = 0;
+          playTone(330, 0.3);
+          log('PAUSED', { reason: 'landmarks-lost' });
+        }
+      }
+      if (onDebug) onDebug({ phase, count, gated: gateState === 'READY' ? 'pausing' : 'no-pose', mode: 'SITUP' });
+      animationFrameId = requestAnimationFrame(processFrame);
+      return;
+    }
+
+    const lm = result.landmarks[0];
+    tracking = true;
+
+    // Transform rotated-space landmarks back to native-video coordinates for
+    // the visible skeleton overlay. For 90° counter-clockwise rotation, the
+    // forward transform is:
+    //   rotated.x = original.y
+    //   rotated.y = 1 - original.x
+    // Inverse:
+    //   original.x = 1 - rotated.y
+    //   original.y = rotated.x
+    const nativeLm = lm.map(p => ({
+      x: 1 - p.y,
+      y: p.x,
+      z: p.z,
+      visibility: p.visibility,
+    }));
+    drawSkeleton(ctx, nativeLm);
+
+    // --- READY GATE ---
+    if (gateState === 'NOT_READY') {
+      if (landmarksVisible(lm)) gateFrames++;
+      else gateFrames = 0;
+
+      const missing = [];
+      if (lm[11].visibility <= MIN_VISIBILITY || lm[12].visibility <= MIN_VISIBILITY) missing.push('shoulder');
+      if (lm[23].visibility <= MIN_VISIBILITY || lm[24].visibility <= MIN_VISIBILITY) missing.push('hip');
+
+      if (onDebug) onDebug({ gateProgress: `${gateFrames}/${READY_FRAMES_NEEDED}`, missing: missing.join(',') || 'none', phase: 'SETUP', count, gated: 'not-ready', mode: 'SITUP' });
+
+      if (gateFrames >= READY_FRAMES_NEEDED) {
+        gateState = 'READY';
+        lostFrames = 0;
+        const initialAngle = computeSpineAngle(lm);
+        baselineAngle = clampBaseline(initialAngle);
+        peakDevMag = 0;
+        signalBuf.length = 0;
+        phase = 'READY';
+        maxDevSinceGate = 0;
+        lastTrackLogFrame = frameNum;
+        playTone(880, 0.15);
+        setTimeout(() => playTone(1100, 0.15), 170);
+        log('READY', { angle: initialAngle.toFixed(1), baseline: baselineAngle.toFixed(1) });
+      }
+      animationFrameId = requestAnimationFrame(processFrame);
+      return;
+    }
+
+    // --- TRACKING (gate is READY) ---
+    if (!landmarksVisible(lm)) {
+      lostFrames++;
+      if (lostFrames >= LOST_FRAMES_THRESHOLD) {
+        gateState = 'NOT_READY';
+        gateFrames = 0;
+        phase = 'READY';
+        signalBuf.length = 0;
+        playTone(330, 0.3);
+        log('PAUSED', { reason: 'landmarks-lost' });
+      }
+      if (onDebug) onDebug({ phase, count, gated: 'losing-landmarks', mode: 'SITUP' });
+      animationFrameId = requestAnimationFrame(processFrame);
+      return;
+    }
+    lostFrames = 0;
+
+    const rawAngle = computeSpineAngle(lm);
+    const smoothedAngle = smoothMedian(rawAngle);
+    // Deviation can be negative (user briefly flatter than baseline), but for
+    // rep detection we only care about positive deviation — sitting up is the
+    // only direction that matters. The spine angle is unsigned by construction,
+    // so no need for a sign-lock mechanism.
+    const devSigned = smoothedAngle - baselineAngle;
+    const devMag = Math.max(0, devSigned);  // only positive deviation counts toward a rep
+    if (devMag > maxDevSinceGate) maxDevSinceGate = devMag;
+
+    // Periodic TRACK log
+    if (frameNum - lastTrackLogFrame >= TRACK_LOG_INTERVAL) {
+      log('TRACK', {
+        phase,
+        raw: rawAngle.toFixed(1),
+        smoothed: smoothedAngle.toFixed(1),
+        baseline: baselineAngle.toFixed(1),
+        dev: devSigned.toFixed(1),
+        maxDev: maxDevSinceGate.toFixed(1),
+      });
+      lastTrackLogFrame = frameNum;
+    }
+
+    // Leg-lock tracking during the rep
+    if (phase === 'ACTIVE') {
+      const currentKneeLift = computeKneeLift(lm);
+      if (startKneeLift !== null) {
+        const delta = Math.abs(currentKneeLift - startKneeLift);
+        if (delta > kneeLiftDeltaMax) kneeLiftDeltaMax = delta;
+      }
+    }
+
+    if (onDebug) onDebug({
+      lift: smoothedAngle.toFixed(1),
+      liftDelta: devSigned.toFixed(1),
+      baseline: baselineAngle.toFixed(1),
+      kneeDelta: phase !== 'READY' ? kneeLiftDeltaMax.toFixed(3) : '--',
+      phase, count, gated: 'active', mode: 'SITUP',
+      depth: Math.min(1, Math.max(0, devMag / MIN_LIFT)),
+      depthThreshold: 1,
+    });
+
+    // --- PHASE MACHINE (single active phase) ---
+    // Rep starts when deviation from the clamped baseline exceeds half MIN_LIFT.
+    // Peak is tracked continuously during ACTIVE. COUNT fires only once peak has
+    // exceeded MIN_LIFT AND the signal has returned to within RETURN_TOLERANCE of
+    // baseline — i.e., the user went from near-flat to ≥40° and back to near-flat.
+    // The baseline is clamped to [0°, MAX_BASELINE_ANGLE] so a user who rests in
+    // a half-curled posture can't trigger counts with partial-range motions.
+    function resetRepState() {
+      phase = 'READY';
+      peakDevMag = 0;
+      startKneeLift = null;
+      kneeLiftDeltaMax = 0;
+    }
+
+    if (phase === 'READY') {
+      // Baseline adaption — only when signal is very close to baseline (frozen during motion).
+      // Clamped to prevent baseline from drifting into a curled rest posture.
+      if (devMag < BASELINE_ADAPT_WINDOW) {
+        baselineAngle = clampBaseline(smoothedAngle * 0.05 + baselineAngle * 0.95);
+      }
+      // Trigger rep start: deviation crosses half-threshold
+      if (devMag > MIN_LIFT * 0.5) {
+        phase = 'ACTIVE';
+        activeStartFrame = frameNum;
+        peakDevMag = devMag;
+        startKneeLift = computeKneeLift(lm);
+        kneeLiftDeltaMax = 0;
+        log('REP_START', { angle: smoothedAngle.toFixed(1), baseline: baselineAngle.toFixed(1), dev: devMag.toFixed(1) });
+      }
+    } else if (phase === 'ACTIVE') {
+      if (devMag > peakDevMag) peakDevMag = devMag;
+      const activeFrames = frameNum - activeStartFrame;
+      const committed = peakDevMag > MIN_LIFT;
+
+      if (!committed && devMag < RETURN_TOLERANCE) {
+        // False start — user twitched but never reached a real rep. Return quietly to READY.
+        resetRepState();
+      } else if (committed && devMag < RETURN_TOLERANCE) {
+        // Signal has returned to rest after a real rep — count it.
+        if (activeFrames < MIN_FRAMES) {
+          log('REJECT', { reason: 'too-fast', frames: activeFrames, peakDevMag: peakDevMag.toFixed(1) });
+          resetRepState();
+        } else if (kneeLiftDeltaMax > MAX_KNEE_LIFT_DELTA) {
+          log('REJECT', { reason: 'knee-moved', kneeDelta: kneeLiftDeltaMax.toFixed(3), peakDevMag: peakDevMag.toFixed(1) });
+          resetRepState();
+        } else {
+          count++; onCount(count); playTone(660, 0.1);
+          log('COUNT', { n: count, peakDevMag: peakDevMag.toFixed(1), activeFrames });
+          resetRepState();
+        }
+      } else if (activeFrames > ACTIVE_TIMEOUT_FRAMES) {
+        log('REJECT', { reason: 'active-timeout', activeFrames, peakDevMag: peakDevMag.toFixed(1) });
+        // On timeout, the user has stayed in a non-rest position too long. Clamp the
+        // new baseline so it still represents "near flat" even if the user is half-curled.
+        baselineAngle = clampBaseline(smoothedAngle);
+        resetRepState();
+      }
+    }
+
+    animationFrameId = requestAnimationFrame(processFrame);
+  }
+  animationFrameId = requestAnimationFrame(processFrame);
+  return { getCount: () => count, isTracking: () => tracking, getLog: () => eventLog, stop: () => { if (animationFrameId) cancelAnimationFrame(animationFrameId); animationFrameId = null; } };
+}
+
+// ============================================================
 // Public API
 // ============================================================
 export function startTracking(video, canvas, onCount, onDebug, mode = 'noob') {
+  if (mode === 'situp') return startSitupTracking(video, canvas, onCount, onDebug);
   if (mode === 'standard') return startStandardTracking(video, canvas, onCount, onDebug);
   return startNoobTracking(video, canvas, onCount, onDebug);
 }

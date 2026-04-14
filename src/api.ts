@@ -77,15 +77,20 @@ export async function handleApiRequest(req: Request): Promise<Response> {
     const todayMet = user.daily_target > 0 && todayTotal >= user.daily_target;
     let todayIcon = 'I';
     if (todayMet) {
-      const stdTotal = getTodayLogs(user.id, prevBoundary, user.next_day_boundary)
-        .filter((l: any) => l.mode === 'standard')
-        .reduce((sum: number, l: any) => sum + l.count, 0);
-      todayIcon = stdTotal >= user.daily_target ? 'S' : 'F';
+      const logs = getTodayLogs(user.id, prevBoundary, user.next_day_boundary);
+      const stdTotal = logs.filter((l: any) => l.mode === 'standard').reduce((sum: number, l: any) => sum + l.count, 0);
+      const situpTotal = logs.filter((l: any) => l.mode === 'situp').reduce((sum: number, l: any) => sum + l.count, 0);
+      todayIcon = stdTotal >= user.daily_target ? 'S'
+        : situpTotal >= user.daily_target ? 'U'
+        : 'F';
     }
     const everLogged = hasEverLoggedPushups(user.id);
     const pastIcons = user.last5 ? user.last5.split(',') : [];
     const allIcons = everLogged ? (todayMet ? [...pastIcons, todayIcon] : pastIcons).slice(-5) : [];
-    const last5days = allIcons.map(i => ({ met: i === 'S' || i === 'F', mode: i === 'S' ? 'standard' : i === 'F' ? 'noob' : 'manual' }));
+    const last5days = allIcons.map(i => ({
+      met: i === 'S' || i === 'F' || i === 'U',
+      mode: i === 'S' ? 'standard' : i === 'U' ? 'situp' : i === 'F' ? 'noob' : 'manual',
+    }));
 
     // Streak: user.streak is from completed days, add 1 if today is met and streak was going
     let streakCount = user.streak;
@@ -139,7 +144,11 @@ export async function handleApiRequest(req: Request): Promise<Response> {
     if (source !== "camera" && source !== "manual") {
       return json({ error: "Source must be 'camera' or 'manual'" }, 400);
     }
-    const logMode = source === 'manual' ? 'manual' : (mode === 'standard' ? 'standard' : 'noob');
+    const logMode = source === 'manual'
+      ? 'manual'
+      : mode === 'standard' ? 'standard'
+      : mode === 'situp' ? 'situp'
+      : 'noob';
     const log = logPushups(user.id, count, source, logMode);
 
     return json(log);
@@ -161,15 +170,20 @@ export async function handleApiRequest(req: Request): Promise<Response> {
       const todayMet = u.daily_target > 0 && todayTotal >= u.daily_target;
       let todayIcon = 'I';
       if (todayMet) {
-        const stdTotal = getTodayLogs(u.id, prevBoundary, u.next_day_boundary)
-          .filter((l: any) => l.mode === 'standard')
-          .reduce((sum: number, l: any) => sum + l.count, 0);
-        todayIcon = stdTotal >= u.daily_target ? 'S' : 'F';
+        const logs = getTodayLogs(u.id, prevBoundary, u.next_day_boundary);
+        const stdTotal = logs.filter((l: any) => l.mode === 'standard').reduce((sum: number, l: any) => sum + l.count, 0);
+        const situpTotal = logs.filter((l: any) => l.mode === 'situp').reduce((sum: number, l: any) => sum + l.count, 0);
+        todayIcon = stdTotal >= u.daily_target ? 'S'
+          : situpTotal >= u.daily_target ? 'U'
+          : 'F';
       }
       const everLogged = hasEverLoggedPushups(u.id);
       const pastIcons = u.last5 ? u.last5.split(',') : [];
       const allIcons = everLogged ? (todayMet ? [...pastIcons, todayIcon] : pastIcons).slice(-5) : [];
-      const last5days = allIcons.map((i: string) => ({ met: i === 'S' || i === 'F', mode: i === 'S' ? 'standard' : i === 'F' ? 'noob' : 'manual' }));
+      const last5days = allIcons.map((i: string) => ({
+        met: i === 'S' || i === 'F' || i === 'U',
+        mode: i === 'S' ? 'standard' : i === 'U' ? 'situp' : i === 'F' ? 'noob' : 'manual',
+      }));
 
       let streakCount = u.streak;
       if (todayMet && streakCount > 0) streakCount++;
