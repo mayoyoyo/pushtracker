@@ -333,7 +333,7 @@ function renderDashboard(app, data) {
         <div class="progress-count" style="${done ? 'color:#22c55e' : ''}">${data.today_total} <span class="progress-target">/ ${data.daily_target}</span></div>
         <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;${done ? 'background:#22c55e' : ''}"></div></div>
         ${data.debt > 0 ? `<div style="margin-top:8px;font-size:12px;color:${debtFullyPaid ? '#22c55e' : 'var(--text-muted)'}">${debtFullyPaid ? '✓' : ''} ${debtCovered}/${data.debt} debt covered</div>` : ''}
-        ${done && data.has_slack ? `<div style="margin-top:${data.debt > 0 ? '4' : '8'}px;font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:5px"><i data-lucide="hash" style="width:12px;height:12px;opacity:0.5"></i> Results posted to Slack at 7am</div>` : ''}
+        ${done && (data.has_slack || data.has_discord) ? `<div style="margin-top:${data.debt > 0 ? '4' : '8'}px;font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:5px"><i data-lucide="hash" style="width:12px;height:12px;opacity:0.5"></i> Results posted to ${data.has_slack && data.has_discord ? 'Slack and Discord' : data.has_slack ? 'Slack' : 'Discord'} at 7am</div>` : ''}
       </div>
       ${remainingDebt > 0 ? `
       <div class="debt-card">

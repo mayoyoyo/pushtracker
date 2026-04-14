@@ -1,5 +1,5 @@
 import { signup, login, logout, getSessionUser, parseSessionToken, sessionCookie, clearSessionCookie } from "./auth";
-import { logPushups, getTodayLogs, getTodayTotal, getResolvedTeamByGroup, updateTarget, updateDebt, updateTimezone, getGroupName, getMonthResults, hasEverLoggedPushups, getSlackConfig, type User } from "./db";
+import { logPushups, getTodayLogs, getTodayTotal, getResolvedTeamByGroup, updateTarget, updateDebt, updateTimezone, getGroupName, getMonthResults, hasEverLoggedPushups, getSlackConfig, getDiscordConfig, type User } from "./db";
 import { getNextDayBoundary, getPreviousDayBoundary } from "./timezone";
 import { processExpiredBoundaries } from "./cron";
 
@@ -93,6 +93,7 @@ export async function handleApiRequest(req: Request): Promise<Response> {
     else if (todayMet) streakCount = 1;
 
     const hasSlack = getSlackConfig(user.invite_code) !== null;
+    const hasDiscord = getDiscordConfig(user.invite_code) !== null;
     return json({
       ...publicUserData(user),
       today_total: todayTotal,
@@ -101,6 +102,7 @@ export async function handleApiRequest(req: Request): Promise<Response> {
       group_name: groupName,
       last5days,
       has_slack: hasSlack,
+      has_discord: hasDiscord,
       streak: { count: streakCount, type: streakCount > 0 ? 'hot' : 'none' },
     });
   }
