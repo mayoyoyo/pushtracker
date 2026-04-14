@@ -124,9 +124,9 @@ body {
   transition: width 0.3s;
 }
 /* Mode colors match the camera mode-select buttons for consistency. */
-.seg-std   { background: var(--one-punch); } /* orange — One Punch (standard) */
+.seg-opm   { background: var(--one-punch); } /* orange — One Punch (opm) */
 .seg-situp { background: var(--info);      } /* blue — sit-up */
-.seg-other { background: var(--primary);   } /* white — noob / manual */
+.seg-std   { background: var(--primary);   } /* white — standard / manual */
 
 .flip-btn {
   width: 28px;

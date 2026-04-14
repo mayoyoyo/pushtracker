@@ -69,7 +69,7 @@ describe("cron", () => {
     const user = createUser("debtuser", "hash", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
     updateTarget(user.id, 20);
     updateDebt(user.id, 30);
-    logPushups(user.id, 35, "camera", "standard", "2026-04-06T14:00:00Z");
+    logPushups(user.id, 35, "camera", "opm", "2026-04-06T14:00:00Z");
     processExpiredBoundaries("2026-04-07T12:00:00Z");
     const updated = getUserById(user.id)!;
     expect(updated.debt).toBe(15); // 30 - min(15 surplus, 30 debt) = 15
@@ -79,7 +79,7 @@ describe("cron", () => {
     const user = createUser("debtuser2", "hash", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
     updateTarget(user.id, 20);
     updateDebt(user.id, 10);
-    logPushups(user.id, 50, "camera", "standard", "2026-04-06T14:00:00Z");
+    logPushups(user.id, 50, "camera", "opm", "2026-04-06T14:00:00Z");
     processExpiredBoundaries("2026-04-07T12:00:00Z");
     const updated = getUserById(user.id)!;
     expect(updated.debt).toBe(0); // 10 - min(30 surplus, 10 debt) = 0
@@ -88,72 +88,72 @@ describe("cron", () => {
   // --- day icon plurality rule ---
   //
   // The day's icon (S/U/F) reflects the mode with the MOST reps that day.
-  // Ties break toward the harder mode: standard > situp > noob/manual.
+  // Ties break toward the harder mode: opm > situp > standard/manual.
   // A missed target is still 'I' regardless of per-mode counts.
 
-  test("day icon: standard plurality wins even with noob reps mixed in", () => {
-    // Was 'F' under the old all-or-nothing rule; now 'S' because std has the plurality.
+  test("day icon: opm plurality wins even with standard reps mixed in", () => {
+    // Was 'F' under the old all-or-nothing rule; now 'S' because opm has the plurality.
     const user = createUser("std_mix", "hash", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
     updateTarget(user.id, 100);
-    logPushups(user.id, 99, "camera", "standard", "2026-04-06T14:00:00Z");
-    logPushups(user.id, 1, "camera", "noob", "2026-04-06T14:05:00Z");
+    logPushups(user.id, 99, "camera", "opm", "2026-04-06T14:00:00Z");
+    logPushups(user.id, 1, "camera", "standard", "2026-04-06T14:05:00Z");
     processExpiredBoundaries("2026-04-07T12:00:00Z");
     expect(getUserById(user.id)!.last5).toBe("S");
   });
 
-  test("day icon: situp plurality wins when standard is underweight", () => {
-    // Was 'F' under the old rule (neither subtotal hit 100); now 'U' because situp > std.
+  test("day icon: situp plurality wins when opm is underweight", () => {
+    // Was 'F' under the old rule (neither subtotal hit 100); now 'U' because situp > opm.
     const user = createUser("situp_maj", "hash", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
     updateTarget(user.id, 100);
     logPushups(user.id, 60, "camera", "situp", "2026-04-06T14:00:00Z");
-    logPushups(user.id, 40, "camera", "standard", "2026-04-06T14:05:00Z");
+    logPushups(user.id, 40, "camera", "opm", "2026-04-06T14:05:00Z");
     processExpiredBoundaries("2026-04-07T12:00:00Z");
     expect(getUserById(user.id)!.last5).toBe("U");
   });
 
-  test("day icon: tie between standard and situp breaks toward standard", () => {
+  test("day icon: tie between opm and situp breaks toward opm", () => {
     const user = createUser("tie_std_situp", "hash", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
     updateTarget(user.id, 100);
-    logPushups(user.id, 50, "camera", "standard", "2026-04-06T14:00:00Z");
+    logPushups(user.id, 50, "camera", "opm", "2026-04-06T14:00:00Z");
     logPushups(user.id, 50, "camera", "situp", "2026-04-06T14:05:00Z");
     processExpiredBoundaries("2026-04-07T12:00:00Z");
     expect(getUserById(user.id)!.last5).toBe("S");
   });
 
-  test("day icon: tie between situp and noob breaks toward situp", () => {
-    const user = createUser("tie_situp_noob", "hash", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
+  test("day icon: tie between situp and standard breaks toward situp", () => {
+    const user = createUser("tie_situp_std", "hash", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
     updateTarget(user.id, 100);
     logPushups(user.id, 50, "camera", "situp", "2026-04-06T14:00:00Z");
-    logPushups(user.id, 50, "camera", "noob", "2026-04-06T14:05:00Z");
+    logPushups(user.id, 50, "camera", "standard", "2026-04-06T14:05:00Z");
     processExpiredBoundaries("2026-04-07T12:00:00Z");
     expect(getUserById(user.id)!.last5).toBe("U");
   });
 
-  test("day icon: tie between standard and noob breaks toward standard", () => {
-    const user = createUser("tie_std_noob", "hash", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
+  test("day icon: tie between opm and standard breaks toward opm", () => {
+    const user = createUser("tie_opm_std", "hash", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
     updateTarget(user.id, 100);
-    logPushups(user.id, 50, "camera", "standard", "2026-04-06T14:00:00Z");
-    logPushups(user.id, 50, "camera", "noob", "2026-04-06T14:05:00Z");
+    logPushups(user.id, 50, "camera", "opm", "2026-04-06T14:00:00Z");
+    logPushups(user.id, 50, "camera", "standard", "2026-04-06T14:05:00Z");
     processExpiredBoundaries("2026-04-07T12:00:00Z");
     expect(getUserById(user.id)!.last5).toBe("S");
   });
 
-  test("day icon: noob plurality still gets fire despite hard-mode reps", () => {
-    // noob=40 is the single largest bucket, even though std+situp combined > noob.
-    const user = createUser("noob_maj", "hash", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
+  test("day icon: standard plurality still gets fire despite hard-mode reps", () => {
+    // standard=40 is the single largest bucket, even though opm+situp combined > standard.
+    const user = createUser("std_maj", "hash", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
     updateTarget(user.id, 100);
-    logPushups(user.id, 30, "camera", "standard", "2026-04-06T14:00:00Z");
+    logPushups(user.id, 30, "camera", "opm", "2026-04-06T14:00:00Z");
     logPushups(user.id, 30, "camera", "situp", "2026-04-06T14:05:00Z");
-    logPushups(user.id, 40, "camera", "noob", "2026-04-06T14:10:00Z");
+    logPushups(user.id, 40, "camera", "standard", "2026-04-06T14:10:00Z");
     processExpiredBoundaries("2026-04-07T12:00:00Z");
     expect(getUserById(user.id)!.last5).toBe("F");
   });
 
-  test("day icon: manual reps are bucketed with noob for plurality purposes", () => {
-    // 49 standard + 51 manual. other=51 > std=49, so the plurality is manual → F.
+  test("day icon: manual reps are bucketed with standard for plurality purposes", () => {
+    // 49 opm + 51 manual. other=51 > opm=49, so the plurality is manual → F.
     const user = createUser("manual_bucket", "hash", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
     updateTarget(user.id, 100);
-    logPushups(user.id, 49, "camera", "standard", "2026-04-06T14:00:00Z");
+    logPushups(user.id, 49, "camera", "opm", "2026-04-06T14:00:00Z");
     logPushups(user.id, 51, "manual", "manual", "2026-04-06T14:05:00Z");
     processExpiredBoundaries("2026-04-07T12:00:00Z");
     expect(getUserById(user.id)!.last5).toBe("F");
@@ -164,7 +164,7 @@ describe("cron", () => {
     db.prepare("UPDATE invite_codes SET slack_bot_token = 'xoxb-test', slack_channel = 'C123' WHERE code = 'DEV0'").run();
     const user = createUser("slackuser", "hash", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
     updateTarget(user.id, 20);
-    logPushups(user.id, 25, "camera", "standard", "2026-04-06T14:00:00Z");
+    logPushups(user.id, 25, "camera", "opm", "2026-04-06T14:00:00Z");
 
     const originalFetch = globalThis.fetch;
     const calls: { url: string; body: any }[] = [];
@@ -195,7 +195,7 @@ describe("cron", () => {
     linkAlias(mayo.id, hanson.id);
 
     updateTarget(hanson.id, 50);
-    logPushups(hanson.id, 60, "camera", "standard", "2026-04-06T14:00:00Z");
+    logPushups(hanson.id, 60, "camera", "opm", "2026-04-06T14:00:00Z");
 
     const calls: any[] = [];
     const realFetch = globalThis.fetch;
@@ -247,7 +247,7 @@ describe("cron", () => {
     getDb(":memory:");
     const user = createUser("noslack", "hash", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
     updateTarget(user.id, 20);
-    logPushups(user.id, 25, "camera", "standard", "2026-04-06T14:00:00Z");
+    logPushups(user.id, 25, "camera", "opm", "2026-04-06T14:00:00Z");
 
     const originalFetch = globalThis.fetch;
     let called = false;
@@ -267,7 +267,7 @@ describe("cron", () => {
     db.prepare("UPDATE invite_codes SET discord_webhook_url = 'https://discord.com/api/webhooks/123/abc' WHERE code = 'DEV0'").run();
     const user = createUser("discorduser", "hash", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
     updateTarget(user.id, 20);
-    logPushups(user.id, 25, "camera", "standard", "2026-04-06T14:00:00Z");
+    logPushups(user.id, 25, "camera", "opm", "2026-04-06T14:00:00Z");
 
     const originalFetch = globalThis.fetch;
     const calls: { url: string; body: any }[] = [];
@@ -293,7 +293,7 @@ describe("cron", () => {
     getDb(":memory:");
     const user = createUser("nodiscord", "hash", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
     updateTarget(user.id, 20);
-    logPushups(user.id, 25, "camera", "standard", "2026-04-06T14:00:00Z");
+    logPushups(user.id, 25, "camera", "opm", "2026-04-06T14:00:00Z");
 
     const originalFetch = globalThis.fetch;
     let called = false;
@@ -318,7 +318,7 @@ describe("cron", () => {
     linkAlias(mayo.id, hanson.id);
 
     updateTarget(hanson.id, 50);
-    logPushups(hanson.id, 60, "camera", "standard", "2026-04-06T14:00:00Z");
+    logPushups(hanson.id, 60, "camera", "opm", "2026-04-06T14:00:00Z");
 
     const calls: any[] = [];
     const realFetch = globalThis.fetch;
@@ -350,7 +350,7 @@ describe("cron", () => {
     db.prepare("UPDATE invite_codes SET slack_bot_token = 'xoxb-test', slack_channel = 'C123', discord_webhook_url = 'https://discord.com/api/webhooks/1/a' WHERE code = 'DEV0'").run();
     const user = createUser("bothuser", "hash", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
     updateTarget(user.id, 20);
-    logPushups(user.id, 25, "camera", "standard", "2026-04-06T14:00:00Z");
+    logPushups(user.id, 25, "camera", "opm", "2026-04-06T14:00:00Z");
 
     const originalFetch = globalThis.fetch;
     const urls: string[] = [];

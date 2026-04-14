@@ -78,20 +78,20 @@ export async function handleApiRequest(req: Request): Promise<Response> {
     const todayLogs = getTodayLogs(user.id, prevBoundary, user.next_day_boundary);
     const todayMet = user.daily_target > 0 && todayTotal >= user.daily_target;
     const todayIcon = pickDayIcon(todayLogs, user.daily_target);
-    // Per-mode breakdown for the segmented progress bar. Manual rolls into noob,
-    // matching the day-icon "other" bucket in src/day-icon.ts.
-    const today_by_mode = { standard: 0, situp: 0, noob: 0 };
+    // Per-mode breakdown for the segmented progress bar. Manual rolls into
+    // standard, matching the day-icon "other" bucket in src/day-icon.ts.
+    const today_by_mode = { opm: 0, situp: 0, standard: 0 };
     for (const log of todayLogs) {
-      if (log.mode === 'standard') today_by_mode.standard += log.count;
+      if (log.mode === 'opm') today_by_mode.opm += log.count;
       else if (log.mode === 'situp') today_by_mode.situp += log.count;
-      else today_by_mode.noob += log.count;
+      else today_by_mode.standard += log.count;
     }
     const everLogged = hasEverLoggedPushups(user.id);
     const pastIcons = user.last5 ? user.last5.split(',') : [];
     const allIcons = everLogged ? (todayMet ? [...pastIcons, todayIcon] : pastIcons).slice(-5) : [];
     const last5days = allIcons.map(i => ({
       met: i === 'S' || i === 'F' || i === 'U',
-      mode: i === 'S' ? 'standard' : i === 'U' ? 'situp' : i === 'F' ? 'noob' : 'manual',
+      mode: i === 'S' ? 'opm' : i === 'U' ? 'situp' : i === 'F' ? 'standard' : 'manual',
     }));
 
     // Streak: user.streak is from completed days, add 1 if today is met and streak was going
@@ -153,9 +153,9 @@ export async function handleApiRequest(req: Request): Promise<Response> {
     }
     const logMode = source === 'manual'
       ? 'manual'
-      : mode === 'standard' ? 'standard'
+      : mode === 'opm' ? 'opm'
       : mode === 'situp' ? 'situp'
-      : 'noob';
+      : 'standard';
     const log = logPushups(user.id, count, source, logMode);
 
     return json(log);
@@ -182,7 +182,7 @@ export async function handleApiRequest(req: Request): Promise<Response> {
       const allIcons = everLogged ? (todayMet ? [...pastIcons, todayIcon] : pastIcons).slice(-5) : [];
       const last5days = allIcons.map((i: string) => ({
         met: i === 'S' || i === 'F' || i === 'U',
-        mode: i === 'S' ? 'standard' : i === 'U' ? 'situp' : i === 'F' ? 'noob' : 'manual',
+        mode: i === 'S' ? 'opm' : i === 'U' ? 'situp' : i === 'F' ? 'standard' : 'manual',
       }));
 
       let streakCount = u.streak;

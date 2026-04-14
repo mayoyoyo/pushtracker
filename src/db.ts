@@ -41,6 +41,11 @@ export function getDb(path: string = "pushtracker.db"): Database {
   try { db.exec("ALTER TABLE invite_codes ADD COLUMN group_name TEXT NOT NULL DEFAULT ''"); } catch {}
   // Add mode to pushup_logs
   try { db.exec("ALTER TABLE pushup_logs ADD COLUMN mode TEXT NOT NULL DEFAULT 'manual'"); } catch {}
+  // Mode rename: 'standard' (old hardcore mode) → 'opm', 'noob' (old gentle mode) → 'standard'.
+  // 'situp' and 'manual' are untouched. Order matters: migrate standard→opm first so
+  // the second step has no collision. Idempotent — safe to run on every startup.
+  db.exec("UPDATE pushup_logs SET mode = 'opm' WHERE mode = 'standard'");
+  db.exec("UPDATE pushup_logs SET mode = 'standard' WHERE mode = 'noob'");
   // Streak columns on users: last5 = comma-separated day results (S/F/I), streak = hot streak count
   try { db.exec("ALTER TABLE users ADD COLUMN last5 TEXT NOT NULL DEFAULT ''"); } catch {}
   try { db.exec("ALTER TABLE users ADD COLUMN streak INTEGER NOT NULL DEFAULT 0"); } catch {}
@@ -65,6 +70,8 @@ export function getDb(path: string = "pushtracker.db"): Database {
     total INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (user_id, day_date)
   )`);
+  db.exec("UPDATE day_results SET mode = 'opm' WHERE mode = 'standard'");
+  db.exec("UPDATE day_results SET mode = 'standard' WHERE mode = 'noob'");
   // Seed invite codes
   db.prepare("INSERT OR IGNORE INTO invite_codes (code, group_name) VALUES ('DEV0', 'MayoLab')").run();
   db.prepare("INSERT OR IGNORE INTO invite_codes (code, group_name) VALUES ('FRST', 'Frist')").run();
@@ -238,7 +245,7 @@ export function getDiscordConfig(inviteCode: string): { discord_webhook_url: str
 // Lifetime totals across all of the user's pushup_logs, with today's
 // in-progress reps included (we sum from the raw log table, not day_results,
 // so anything logged before the next rollup still counts). Sit-ups are a
-// single mode; pushups bucket standard + noob + manual together (any non-situp
+// single mode; pushups bucket opm + standard + manual together (any non-situp
 // rep). Alias-aware via resolveDataUserId — mayo and hanson see the same row.
 export function getLifetimeTotals(userId: number): { pushups: number; situps: number } {
   userId = resolveDataUserId(userId);

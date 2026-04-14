@@ -173,8 +173,8 @@ describe("database", () => {
 
     test("sums situp reps into situps, everything else into pushups", () => {
       const user = createUser("mix", "hash", "UTC", "2026-04-08T07:00:00Z", "DEV0");
-      logPushups(user.id, 20, "camera", "standard");
-      logPushups(user.id, 15, "camera", "noob");
+      logPushups(user.id, 20, "camera", "opm");
+      logPushups(user.id, 15, "camera", "standard");
       logPushups(user.id, 5,  "manual", "manual");
       logPushups(user.id, 30, "camera", "situp");
       logPushups(user.id, 10, "camera", "situp");
@@ -185,7 +185,7 @@ describe("database", () => {
       // Target here: prove the helper reads the raw log table and returns
       // today's reps without depending on the cron having rolled up the day.
       const user = createUser("inprogress", "hash", "UTC", "2026-04-08T07:00:00Z", "DEV0");
-      logPushups(user.id, 25, "camera", "standard", "2026-04-08T06:30:00Z");
+      logPushups(user.id, 25, "camera", "opm", "2026-04-08T06:30:00Z");
       logPushups(user.id, 15, "camera", "situp",    "2026-04-08T06:45:00Z");
       // No processExpiredBoundaries call — day_results is empty, but the totals still land.
       expect(getLifetimeTotals(user.id)).toEqual({ pushups: 25, situps: 15 });
@@ -196,7 +196,7 @@ describe("database", () => {
       const mayo   = createUser("mayo",   "h", "America/New_York", "2026-04-08T11:00:00Z", "FRST");
       linkAlias(mayo.id, hanson.id);
       // Log against hanson directly — all reps live under the source.
-      logPushups(hanson.id, 50, "camera", "standard");
+      logPushups(hanson.id, 50, "camera", "opm");
       logPushups(hanson.id, 20, "camera", "situp");
       const h = getLifetimeTotals(hanson.id);
       const m = getLifetimeTotals(mayo.id);
@@ -210,7 +210,7 @@ describe("database", () => {
       const hanson = createUser("hanson2", "h", "America/New_York", "2026-04-08T11:00:00Z", "DEV0");
       const mayo   = createUser("mayo2",   "h", "America/New_York", "2026-04-08T11:00:00Z", "FRST");
       linkAlias(mayo.id, hanson.id);
-      logPushups(mayo.id, 100, "camera", "standard");
+      logPushups(mayo.id, 100, "camera", "opm");
       logPushups(mayo.id, 40,  "camera", "situp");
       expect(getLifetimeTotals(mayo.id)).toEqual({ pushups: 100, situps: 40 });
       expect(getLifetimeTotals(hanson.id)).toEqual({ pushups: 100, situps: 40 });
@@ -220,8 +220,8 @@ describe("database", () => {
   describe("logPushups with mode", () => {
     test("stores mode field", () => {
       const user = createUser("modetest", "hash", "UTC", "2026-04-08T07:00:00Z", "DEV0");
-      const log = logPushups(user.id, 10, "camera", "standard");
-      expect(log.mode).toBe("standard");
+      const log = logPushups(user.id, 10, "camera", "opm");
+      expect(log.mode).toBe("opm");
     });
 
     test("defaults mode to manual", () => {
@@ -281,7 +281,7 @@ describe("database", () => {
       const mayo = createUser("mayo", "h", "America/New_York", "2026-04-08T11:00:00Z", "FRST");
       linkAlias(mayo.id, hanson.id);
 
-      saveDayResult(hanson.id, "2026-04-06", true, "standard", 30);
+      saveDayResult(hanson.id, "2026-04-06", true, "opm", 30);
       const results = getMonthResults(mayo.id, "2026-04");
       expect(results.length).toBe(1);
       expect(results[0].total).toBe(30);
@@ -320,7 +320,7 @@ describe("database", () => {
 
     test("saveDayResult on alias writes under source id", () => {
       const { hanson, mayo } = pair();
-      saveDayResult(mayo.id, "2026-04-06", true, "standard", 30);
+      saveDayResult(mayo.id, "2026-04-06", true, "opm", 30);
       const rows = getMonthResults(hanson.id, "2026-04");
       expect(rows.length).toBe(1);
       expect(rows[0].total).toBe(30);

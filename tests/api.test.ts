@@ -89,8 +89,8 @@ describe("api", () => {
     });
 
     test("sums reps into pushups vs situps, including in-progress reps", async () => {
-      await authedRequest("POST", "/api/pushups", token, { count: 40, source: "camera", mode: "standard" });
-      await authedRequest("POST", "/api/pushups", token, { count: 10, source: "camera", mode: "noob" });
+      await authedRequest("POST", "/api/pushups", token, { count: 40, source: "camera", mode: "opm" });
+      await authedRequest("POST", "/api/pushups", token, { count: 10, source: "camera", mode: "standard" });
       await authedRequest("POST", "/api/pushups", token, { count: 5,  source: "manual" });
       await authedRequest("POST", "/api/pushups", token, { count: 25, source: "camera", mode: "situp" });
       const res = await authedRequest("GET", "/api/me/lifetime", token);
@@ -146,7 +146,7 @@ describe("api", () => {
       updateTarget(hanson.id, 40);
       updateDebt(hanson.id, 15);
       updateStreak(hanson.id, "S,S,F", 3);
-      logPushups(hanson.id, 25, "camera", "standard");
+      logPushups(hanson.id, 25, "camera", "opm");
 
       const res = await handleApiRequest(new Request("http://x/api/team/today", {
         headers: { cookie: `session=${mayoTok}` },
@@ -171,7 +171,7 @@ describe("api", () => {
 
       updateTarget(hanson.id, 40);
       updateDebt(hanson.id, 7);
-      logPushups(hanson.id, 25, "camera", "standard");
+      logPushups(hanson.id, 25, "camera", "opm");
 
       const hRes = await handleApiRequest(new Request("http://x/api/me", {
         headers: { cookie: `session=${hTok}` },
@@ -218,7 +218,7 @@ describe("api", () => {
       const { token: mTok, user: mayo } = await signup("mayo5", "2222", "America/New_York", "FRST");
       linkAlias(mayo.id, hanson.id);
 
-      saveDayResult(hanson.id, "2026-04-06", true, "standard", 30);
+      saveDayResult(hanson.id, "2026-04-06", true, "opm", 30);
       saveDayResult(hanson.id, "2026-04-05", false, "manual", 10);
 
       const res = await handleApiRequest(new Request("http://x/api/me/calendar?year=2026&month=4", {
