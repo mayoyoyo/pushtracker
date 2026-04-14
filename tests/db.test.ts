@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from "bun:test";
-import { getDb, createUser, getUserByUsername, getUserById, logPushups, getTodayLogs, getTodayTotal, getMonthResults, hasEverLoggedPushups, getTeamByGroup, updateTarget, updateDebt, getGroupName, getSlackConfig, resolveDataUserId, linkAlias, saveDayResult } from "../src/db";
+import { getDb, createUser, getUserByUsername, getUserById, logPushups, getTodayLogs, getTodayTotal, getMonthResults, hasEverLoggedPushups, getTeamByGroup, updateTarget, updateDebt, getGroupName, getSlackConfig, resolveDataUserId, linkAlias, saveDayResult, updateStreak, updateTimezone } from "../src/db";
 
 describe("database", () => {
   beforeEach(() => {
@@ -213,6 +213,55 @@ describe("database", () => {
       const results = getMonthResults(mayo.id, "2026-04");
       expect(results.length).toBe(1);
       expect(results[0].total).toBe(30);
+    });
+  });
+
+  describe("alias data writes", () => {
+    function pair() {
+      const hanson = createUser("hanson", "h", "America/New_York", "2026-04-08T11:00:00Z", "DEV0");
+      const mayo = createUser("mayo", "h", "America/New_York", "2026-04-08T11:00:00Z", "FRST");
+      linkAlias(mayo.id, hanson.id);
+      return { hanson, mayo };
+    }
+
+    test("updateDebt on alias mutates source row", () => {
+      const { hanson, mayo } = pair();
+      updateDebt(mayo.id, 25);
+      expect(getUserById(hanson.id)!.debt).toBe(25);
+      expect(getUserById(mayo.id)!.debt).toBe(0);
+    });
+
+    test("updateTarget on alias mutates source row", () => {
+      const { hanson, mayo } = pair();
+      updateTarget(mayo.id, 40);
+      expect(getUserById(hanson.id)!.daily_target).toBe(40);
+      expect(getUserById(mayo.id)!.daily_target).toBe(20);
+    });
+
+    test("updateStreak on alias mutates source row", () => {
+      const { hanson, mayo } = pair();
+      updateStreak(mayo.id, "S,S,F", 3);
+      expect(getUserById(hanson.id)!.streak).toBe(3);
+      expect(getUserById(hanson.id)!.last5).toBe("S,S,F");
+      expect(getUserById(mayo.id)!.streak).toBe(0);
+    });
+
+    test("saveDayResult on alias writes under source id", () => {
+      const { hanson, mayo } = pair();
+      saveDayResult(mayo.id, "2026-04-06", true, "standard", 30);
+      const rows = getMonthResults(hanson.id, "2026-04");
+      expect(rows.length).toBe(1);
+      expect(rows[0].total).toBe(30);
+    });
+
+    test("updateTimezone on alias mutates source row (timezone + boundary)", () => {
+      const { hanson, mayo } = pair();
+      updateTimezone(mayo.id, "Europe/London", "2026-04-09T00:00:00.000Z");
+      const h = getUserById(hanson.id)!;
+      const m = getUserById(mayo.id)!;
+      expect(h.timezone).toBe("Europe/London");
+      expect(h.next_day_boundary).toBe("2026-04-09T00:00:00.000Z");
+      expect(m.timezone).toBe("America/New_York");
     });
   });
 });

@@ -125,14 +125,17 @@ export function getUserById(id: number): User | null {
 }
 
 export function updateTarget(userId: number, target: number): void {
+  userId = resolveDataUserId(userId);
   db.prepare("UPDATE users SET daily_target = ? WHERE id = ?").run(target, userId);
 }
 
 export function updateDebt(userId: number, delta: number): void {
+  userId = resolveDataUserId(userId);
   db.prepare("UPDATE users SET debt = MAX(0, debt + ?) WHERE id = ?").run(delta, userId);
 }
 
 export function updateTimezone(userId: number, timezone: string, nextDayBoundary: string): void {
+  userId = resolveDataUserId(userId);
   db.prepare("UPDATE users SET timezone = ?, next_day_boundary = ? WHERE id = ?").run(timezone, nextDayBoundary, userId);
 }
 
@@ -172,6 +175,7 @@ export function getTeamByGroup(inviteCode: string): User[] {
 }
 
 export function saveDayResult(userId: number, dayDate: string, met: boolean, mode: string, total: number): void {
+  userId = resolveDataUserId(userId);
   db.prepare(
     "INSERT OR REPLACE INTO day_results (user_id, day_date, met, mode, total) VALUES (?, ?, ?, ?, ?)"
   ).run(userId, dayDate, met ? 1 : 0, mode, total);
@@ -186,6 +190,7 @@ export function getMonthResults(userId: number, yearMonth: string): Array<{ day_
 }
 
 export function updateStreak(userId: number, last5: string, streak: number): void {
+  userId = resolveDataUserId(userId);
   db.prepare("UPDATE users SET last5 = ?, streak = ? WHERE id = ?").run(last5, streak, userId);
 }
 
