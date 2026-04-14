@@ -141,6 +141,7 @@ export function updateNextDayBoundary(userId: number, nextDayBoundary: string): 
 }
 
 export function logPushups(userId: number, count: number, source: string, mode: string = 'manual', loggedAt?: string): PushupLog {
+  userId = resolveDataUserId(userId);
   if (loggedAt) {
     return db.prepare(
       "INSERT INTO pushup_logs (user_id, count, source, mode, logged_at) VALUES (?, ?, ?, ?, ?) RETURNING *"
@@ -152,12 +153,14 @@ export function logPushups(userId: number, count: number, source: string, mode: 
 }
 
 export function getTodayLogs(userId: number, dayStart: string, dayEnd: string): PushupLog[] {
+  userId = resolveDataUserId(userId);
   return db.prepare(
     "SELECT * FROM pushup_logs WHERE user_id = ? AND logged_at >= ? AND logged_at < ? ORDER BY logged_at"
   ).all(userId, dayStart, dayEnd) as PushupLog[];
 }
 
 export function getTodayTotal(userId: number, dayStart: string, dayEnd: string): number {
+  userId = resolveDataUserId(userId);
   const row = db.prepare(
     "SELECT COALESCE(SUM(count), 0) as total FROM pushup_logs WHERE user_id = ? AND logged_at >= ? AND logged_at < ?"
   ).get(userId, dayStart, dayEnd) as { total: number };
@@ -175,6 +178,7 @@ export function saveDayResult(userId: number, dayDate: string, met: boolean, mod
 }
 
 export function getMonthResults(userId: number, yearMonth: string): Array<{ day_date: string; met: boolean; mode: string; total: number }> {
+  userId = resolveDataUserId(userId);
   const rows = db.prepare(
     "SELECT * FROM day_results WHERE user_id = ? AND day_date LIKE ? ORDER BY day_date"
   ).all(userId, yearMonth + '%') as Array<{ day_date: string; met: number; mode: string; total: number }>;
@@ -192,6 +196,7 @@ export function getGroupName(inviteCode: string): string {
 
 
 export function hasEverLoggedPushups(userId: number): boolean {
+  userId = resolveDataUserId(userId);
   const row = db.prepare("SELECT 1 FROM pushup_logs WHERE user_id = ? LIMIT 1").get(userId);
   return row !== null;
 }

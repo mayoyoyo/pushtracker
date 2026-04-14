@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from "bun:test";
-import { getDb, createUser, getUserByUsername, getUserById, logPushups, getTodayLogs, getTeamByGroup, updateTarget, updateDebt, getGroupName, getDayHistory, getSlackConfig, resolveDataUserId, linkAlias } from "../src/db";
+import { getDb, createUser, getUserByUsername, getUserById, logPushups, getTodayLogs, getTodayTotal, getMonthResults, hasEverLoggedPushups, getTeamByGroup, updateTarget, updateDebt, getGroupName, getSlackConfig, resolveDataUserId, linkAlias, saveDayResult } from "../src/db";
 
 describe("database", () => {
   beforeEach(() => {
@@ -156,6 +156,63 @@ describe("database", () => {
       const user = createUser("modetest2", "hash", "UTC", "2026-04-08T07:00:00Z", "DEV0");
       const log = logPushups(user.id, 10, "manual");
       expect(log.mode).toBe("manual");
+    });
+  });
+
+  describe("alias data reads", () => {
+    test("logPushups from alias id inserts under source id", () => {
+      const hanson = createUser("hanson", "h", "America/New_York", "2026-04-08T11:00:00Z", "DEV0");
+      const mayo = createUser("mayo", "h", "America/New_York", "2026-04-08T11:00:00Z", "FRST");
+      linkAlias(mayo.id, hanson.id);
+
+      const log = logPushups(mayo.id, 15, "manual");
+      expect(log.user_id).toBe(hanson.id);
+    });
+
+    test("getTodayTotal from alias id returns source's total", () => {
+      const hanson = createUser("hanson", "h", "America/New_York", "2026-04-08T11:00:00Z", "DEV0");
+      const mayo = createUser("mayo", "h", "America/New_York", "2026-04-08T11:00:00Z", "FRST");
+      linkAlias(mayo.id, hanson.id);
+
+      logPushups(hanson.id, 10, "manual", "manual", "2026-04-07T14:00:00Z");
+      logPushups(mayo.id, 5, "manual", "manual", "2026-04-07T15:00:00Z");
+
+      const hansonTotal = getTodayTotal(hanson.id, "2026-04-07T11:00:00Z", "2026-04-08T11:00:00Z");
+      const mayoTotal = getTodayTotal(mayo.id, "2026-04-07T11:00:00Z", "2026-04-08T11:00:00Z");
+      expect(hansonTotal).toBe(15);
+      expect(mayoTotal).toBe(15);
+    });
+
+    test("getTodayLogs from alias id returns source's logs", () => {
+      const hanson = createUser("hanson", "h", "America/New_York", "2026-04-08T11:00:00Z", "DEV0");
+      const mayo = createUser("mayo", "h", "America/New_York", "2026-04-08T11:00:00Z", "FRST");
+      linkAlias(mayo.id, hanson.id);
+
+      logPushups(hanson.id, 10, "manual", "manual", "2026-04-07T14:00:00Z");
+      const logs = getTodayLogs(mayo.id, "2026-04-07T11:00:00Z", "2026-04-08T11:00:00Z");
+      expect(logs.length).toBe(1);
+      expect(logs[0].count).toBe(10);
+    });
+
+    test("hasEverLoggedPushups resolves through alias", () => {
+      const hanson = createUser("hanson", "h", "America/New_York", "2026-04-08T11:00:00Z", "DEV0");
+      const mayo = createUser("mayo", "h", "America/New_York", "2026-04-08T11:00:00Z", "FRST");
+      linkAlias(mayo.id, hanson.id);
+
+      expect(hasEverLoggedPushups(mayo.id)).toBe(false);
+      logPushups(hanson.id, 10, "manual");
+      expect(hasEverLoggedPushups(mayo.id)).toBe(true);
+    });
+
+    test("getMonthResults resolves through alias", () => {
+      const hanson = createUser("hanson", "h", "America/New_York", "2026-04-08T11:00:00Z", "DEV0");
+      const mayo = createUser("mayo", "h", "America/New_York", "2026-04-08T11:00:00Z", "FRST");
+      linkAlias(mayo.id, hanson.id);
+
+      saveDayResult(hanson.id, "2026-04-06", true, "standard", 30);
+      const results = getMonthResults(mayo.id, "2026-04");
+      expect(results.length).toBe(1);
+      expect(results[0].total).toBe(30);
     });
   });
 });
