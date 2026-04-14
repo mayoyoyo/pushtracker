@@ -2,6 +2,7 @@ import { signup, login, logout, getSessionUser, parseSessionToken, sessionCookie
 import { logPushups, getTodayLogs, getTodayTotal, getResolvedTeamByGroup, updateTarget, updateDebt, updateTimezone, getGroupName, getMonthResults, hasEverLoggedPushups, getSlackConfig, getDiscordConfig, type User } from "./db";
 import { getNextDayBoundary, getPreviousDayBoundary } from "./timezone";
 import { processExpiredBoundaries } from "./cron";
+import { pickDayIcon } from "./day-icon";
 
 function json(data: unknown, status = 200, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(data), {
@@ -75,15 +76,8 @@ export async function handleApiRequest(req: Request): Promise<Response> {
     const groupName = getGroupName(user.invite_code);
     // Parse last5 from user row, prepend today's live status
     const todayMet = user.daily_target > 0 && todayTotal >= user.daily_target;
-    let todayIcon = 'I';
-    if (todayMet) {
-      const logs = getTodayLogs(user.id, prevBoundary, user.next_day_boundary);
-      const stdTotal = logs.filter((l: any) => l.mode === 'standard').reduce((sum: number, l: any) => sum + l.count, 0);
-      const situpTotal = logs.filter((l: any) => l.mode === 'situp').reduce((sum: number, l: any) => sum + l.count, 0);
-      todayIcon = stdTotal >= user.daily_target ? 'S'
-        : situpTotal >= user.daily_target ? 'U'
-        : 'F';
-    }
+    const todayLogs = todayMet ? getTodayLogs(user.id, prevBoundary, user.next_day_boundary) : [];
+    const todayIcon = pickDayIcon(todayLogs, user.daily_target);
     const everLogged = hasEverLoggedPushups(user.id);
     const pastIcons = user.last5 ? user.last5.split(',') : [];
     const allIcons = everLogged ? (todayMet ? [...pastIcons, todayIcon] : pastIcons).slice(-5) : [];
@@ -168,15 +162,8 @@ export async function handleApiRequest(req: Request): Promise<Response> {
       const prevBoundary = getPreviousDayBoundary(u.timezone, u.next_day_boundary);
       const todayTotal = getTodayTotal(u.id, prevBoundary, u.next_day_boundary);
       const todayMet = u.daily_target > 0 && todayTotal >= u.daily_target;
-      let todayIcon = 'I';
-      if (todayMet) {
-        const logs = getTodayLogs(u.id, prevBoundary, u.next_day_boundary);
-        const stdTotal = logs.filter((l: any) => l.mode === 'standard').reduce((sum: number, l: any) => sum + l.count, 0);
-        const situpTotal = logs.filter((l: any) => l.mode === 'situp').reduce((sum: number, l: any) => sum + l.count, 0);
-        todayIcon = stdTotal >= u.daily_target ? 'S'
-          : situpTotal >= u.daily_target ? 'U'
-          : 'F';
-      }
+      const todayLogs = todayMet ? getTodayLogs(u.id, prevBoundary, u.next_day_boundary) : [];
+      const todayIcon = pickDayIcon(todayLogs, u.daily_target);
       const everLogged = hasEverLoggedPushups(u.id);
       const pastIcons = u.last5 ? u.last5.split(',') : [];
       const allIcons = everLogged ? (todayMet ? [...pastIcons, todayIcon] : pastIcons).slice(-5) : [];

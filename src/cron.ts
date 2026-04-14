@@ -2,6 +2,7 @@ import { getUsersWithExpiredBoundary, getUserById, getTodayTotal, getTodayLogs, 
 import { advanceBoundary, getPreviousDayBoundary } from "./timezone";
 import { postDayResult } from "./slack";
 import { postDayResult as postDiscordDayResult } from "./discord";
+import { pickDayIcon, dayIconToMode } from "./day-icon";
 import { DateTime } from "luxon";
 
 const CRON_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
@@ -84,22 +85,11 @@ export function processExpiredBoundaries(nowUtc: string): void {
       const todayTotal = getTodayTotal(user.id, prevBoundary, user.next_day_boundary);
       const shortfall = user.daily_target - todayTotal;
 
-      // Day icon: S=standard, U=situp, F=fire(noob/manual/mixed), I=ice(missed).
-      // Icon reflects the mode with the most reps that day (plurality, not majority).
-      // Ties break toward the harder mode: standard > situp > noob/manual — matches
-      // the user-facing difficulty ranking (OPM fist > flex > fire).
+      // Day icon via shared helper (see src/day-icon.ts) so the rolled-up icon
+      // matches the live /api/me and /api/team/today computations.
       const met = user.daily_target > 0 && todayTotal >= user.daily_target;
-      let dayIcon = 'I';
-      if (met) {
-        const logs = getTodayLogs(user.id, prevBoundary, user.next_day_boundary);
-        const stdTotal = logs.filter(l => l.mode === 'standard').reduce((sum, l) => sum + l.count, 0);
-        const situpTotal = logs.filter(l => l.mode === 'situp').reduce((sum, l) => sum + l.count, 0);
-        const otherTotal = logs.filter(l => l.mode !== 'standard' && l.mode !== 'situp').reduce((sum, l) => sum + l.count, 0);
-        const maxTotal = Math.max(stdTotal, situpTotal, otherTotal);
-        dayIcon = stdTotal === maxTotal ? 'S'
-          : situpTotal === maxTotal ? 'U'
-          : 'F';
-      }
+      const logs = getTodayLogs(user.id, prevBoundary, user.next_day_boundary);
+      const dayIcon = pickDayIcon(logs, user.daily_target);
       // Shift last5: append new day, keep max 5
       const days = user.last5 ? user.last5.split(',') : [];
       days.push(dayIcon);
@@ -115,12 +105,7 @@ export function processExpiredBoundaries(nowUtc: string): void {
 
       // Save to day_results for calendar (date = the day that just ended)
       const dayDate = DateTime.fromISO(prevBoundary, { zone: 'utc' }).setZone(user.timezone).toISODate();
-      saveDayResult(user.id, dayDate!, met,
-        dayIcon === 'S' ? 'standard'
-        : dayIcon === 'U' ? 'situp'
-        : dayIcon === 'F' ? 'noob'
-        : 'manual',
-        todayTotal);
+      saveDayResult(user.id, dayDate!, met, dayIconToMode(dayIcon), todayTotal);
 
       // Debt: add shortfall or reduce by surplus
       if (shortfall > 0) {
