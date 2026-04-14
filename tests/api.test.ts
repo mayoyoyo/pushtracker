@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from "bun:test";
-import { getDb } from "../src/db";
+import { getDb, linkAlias, updateTarget, updateDebt, updateStreak, logPushups } from "../src/db";
 import { signup } from "../src/auth";
 import { handleApiRequest } from "../src/api";
 
@@ -114,6 +114,30 @@ describe("api", () => {
       expect(res.status).toBe(200);
       const data = await res.json();
       expect(data.team.length).toBe(2);
+    });
+
+    test("GET /api/team/today on Frist shows mayo with hanson's progress", async () => {
+      const { user: hanson } = await signup("hanson2", "1111", "America/New_York", "DEV0");
+      const { token: mayoTok, user: mayo } = await signup("mayo", "2222", "America/New_York", "FRST");
+      linkAlias(mayo.id, hanson.id);
+
+      updateTarget(hanson.id, 40);
+      updateDebt(hanson.id, 15);
+      updateStreak(hanson.id, "S,S,F", 3);
+      logPushups(hanson.id, 25, "camera", "standard");
+
+      const res = await handleApiRequest(new Request("http://x/api/team/today", {
+        headers: { cookie: `session=${mayoTok}` },
+      }));
+      const body = await res.json();
+      expect(body.group_name).toBe("Frist");
+
+      const mayoRow = body.team.find((u: any) => u.username === "mayo");
+      expect(mayoRow).toBeDefined();
+      expect(mayoRow.daily_target).toBe(40);
+      expect(mayoRow.debt).toBe(15);
+      expect(mayoRow.streak.count).toBeGreaterThanOrEqual(3);
+      expect(mayoRow.today_total).toBe(25);
     });
   });
 });

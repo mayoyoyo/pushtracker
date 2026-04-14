@@ -1,5 +1,5 @@
 import { signup, login, logout, getSessionUser, parseSessionToken, sessionCookie, clearSessionCookie } from "./auth";
-import { logPushups, getTodayLogs, getTodayTotal, getTeamByGroup, updateTarget, updateDebt, updateTimezone, getGroupName, getMonthResults, hasEverLoggedPushups, getSlackConfig, type User } from "./db";
+import { logPushups, getTodayLogs, getTodayTotal, getResolvedTeamByGroup, updateTarget, updateDebt, updateTimezone, getGroupName, getMonthResults, hasEverLoggedPushups, getSlackConfig, type User } from "./db";
 import { getNextDayBoundary, getPreviousDayBoundary } from "./timezone";
 import { processExpiredBoundaries } from "./cron";
 
@@ -151,7 +151,7 @@ export async function handleApiRequest(req: Request): Promise<Response> {
   }
 
   if (path === "/api/team/today" && method === "GET") {
-    const allUsers = getTeamByGroup(user.invite_code);
+    const allUsers = getResolvedTeamByGroup(user.invite_code);
     const groupName = getGroupName(user.invite_code);
     const team = allUsers.map((u) => {
       const prevBoundary = getPreviousDayBoundary(u.timezone, u.next_day_boundary);
