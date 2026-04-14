@@ -690,7 +690,7 @@ async function renderCamera(app) {
             <div id="depth-fill" style="position:absolute;bottom:0;left:0;right:0;height:0%;background:#ef4444;transition:height 0.05s,background 0.1s;border-radius:0 0 5px 5px"></div>
           </div>
           <div id="cam-gate-msg" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:#fff;font-size:16px;font-weight:600;text-shadow:0 2px 8px rgba(0,0,0,0.8);pointer-events:none">
-            ${mode === 'standard' ? 'Stand sideways to the camera' : mode === 'situp' ? 'Lie down with phone to your side' : 'Face the camera'}...
+            ${mode === 'standard' ? 'Stand sideways to the camera' : mode === 'situp' ? 'Lie down in view of the camera' : 'Face the camera'}...
           </div>
           <div id="cam-congrats" style="display:none;position:absolute;top:30%;left:50%;transform:translate(-50%,-50%);text-align:center;color:#fff;pointer-events:none">
             <div style="font-size:24px;font-weight:700;text-shadow:0 2px 8px rgba(0,0,0,0.8)">Daily complete!</div>
@@ -778,7 +778,7 @@ async function renderCamera(app) {
               gateMsg.textContent = 'Hold still...';
             } else if (missing && missing !== 'none') {
               gateMsg.textContent = mode === 'standard' ? 'Stand sideways to the camera'
-                : mode === 'situp' ? 'Lie down with phone to your side'
+                : mode === 'situp' ? 'Lie down in view of the camera'
                 : 'Face the camera';
             } else {
               gateMsg.textContent = 'Looking for you...';
