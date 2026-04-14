@@ -30,7 +30,7 @@ export async function login(username: string, passcode: string): Promise<{ user:
   const token = generateToken();
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
   createSession(token, user.id, expiresAt);
-  return { user, token };
+  return { user: getResolvedUserById(user.id) ?? user, token };
 }
 
 export function getSessionUser(token: string): User | null {
