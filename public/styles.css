@@ -221,6 +221,21 @@ body {
   font-size: 16px; text-align: center; outline: none;
 }
 .setting-value input:focus { border-color: var(--text-dim); }
+.setting-section-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  padding: 16px 0 4px 0;
+  margin-top: 4px;
+  border-bottom: 1px solid var(--border);
+}
+.lifetime-value {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
 
 /* Toast */
 .toast {

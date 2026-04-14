@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from "bun:test";
-import { getDb, createUser, getUserByUsername, getUserById, logPushups, getTodayLogs, getTodayTotal, getMonthResults, hasEverLoggedPushups, getTeamByGroup, updateTarget, updateDebt, getGroupName, getSlackConfig, getDiscordConfig, resolveDataUserId, linkAlias, saveDayResult, updateStreak, updateTimezone, getResolvedUserById, getResolvedTeamByGroup, getUsersWithExpiredBoundary, linkMayoToHansonIfNeeded } from "../src/db";
+import { getDb, createUser, getUserByUsername, getUserById, logPushups, getTodayLogs, getTodayTotal, getMonthResults, hasEverLoggedPushups, getTeamByGroup, updateTarget, updateDebt, getGroupName, getSlackConfig, getDiscordConfig, getLifetimeTotals, resolveDataUserId, linkAlias, saveDayResult, updateStreak, updateTimezone, getResolvedUserById, getResolvedTeamByGroup, getUsersWithExpiredBoundary, linkMayoToHansonIfNeeded } from "../src/db";
 
 describe("database", () => {
   beforeEach(() => {
@@ -162,6 +162,58 @@ describe("database", () => {
       const db = getDb(":memory:");
       db.prepare("UPDATE invite_codes SET discord_webhook_url = '' WHERE code = 'DEV0'").run();
       expect(getDiscordConfig("DEV0")).toBeNull();
+    });
+  });
+
+  describe("getLifetimeTotals", () => {
+    test("returns zeros for a user with no logs", () => {
+      const user = createUser("blank", "hash", "UTC", "2026-04-08T07:00:00Z", "DEV0");
+      expect(getLifetimeTotals(user.id)).toEqual({ pushups: 0, situps: 0 });
+    });
+
+    test("sums situp reps into situps, everything else into pushups", () => {
+      const user = createUser("mix", "hash", "UTC", "2026-04-08T07:00:00Z", "DEV0");
+      logPushups(user.id, 20, "camera", "standard");
+      logPushups(user.id, 15, "camera", "noob");
+      logPushups(user.id, 5,  "manual", "manual");
+      logPushups(user.id, 30, "camera", "situp");
+      logPushups(user.id, 10, "camera", "situp");
+      expect(getLifetimeTotals(user.id)).toEqual({ pushups: 40, situps: 40 });
+    });
+
+    test("includes in-progress reps (sums from pushup_logs, not day_results)", () => {
+      // Target here: prove the helper reads the raw log table and returns
+      // today's reps without depending on the cron having rolled up the day.
+      const user = createUser("inprogress", "hash", "UTC", "2026-04-08T07:00:00Z", "DEV0");
+      logPushups(user.id, 25, "camera", "standard", "2026-04-08T06:30:00Z");
+      logPushups(user.id, 15, "camera", "situp",    "2026-04-08T06:45:00Z");
+      // No processExpiredBoundaries call — day_results is empty, but the totals still land.
+      expect(getLifetimeTotals(user.id)).toEqual({ pushups: 25, situps: 15 });
+    });
+
+    test("alias resolves to source's totals", () => {
+      const hanson = createUser("hanson", "h", "America/New_York", "2026-04-08T11:00:00Z", "DEV0");
+      const mayo   = createUser("mayo",   "h", "America/New_York", "2026-04-08T11:00:00Z", "FRST");
+      linkAlias(mayo.id, hanson.id);
+      // Log against hanson directly — all reps live under the source.
+      logPushups(hanson.id, 50, "camera", "standard");
+      logPushups(hanson.id, 20, "camera", "situp");
+      const h = getLifetimeTotals(hanson.id);
+      const m = getLifetimeTotals(mayo.id);
+      expect(h).toEqual({ pushups: 50, situps: 20 });
+      expect(m).toEqual(h); // alias sees identical totals
+    });
+
+    test("alias writes resolve to source for totals too", () => {
+      // logPushups(mayo, ...) resolves to hanson via resolveDataUserId. So
+      // getLifetimeTotals on either id should agree with that single row set.
+      const hanson = createUser("hanson2", "h", "America/New_York", "2026-04-08T11:00:00Z", "DEV0");
+      const mayo   = createUser("mayo2",   "h", "America/New_York", "2026-04-08T11:00:00Z", "FRST");
+      linkAlias(mayo.id, hanson.id);
+      logPushups(mayo.id, 100, "camera", "standard");
+      logPushups(mayo.id, 40,  "camera", "situp");
+      expect(getLifetimeTotals(mayo.id)).toEqual({ pushups: 100, situps: 40 });
+      expect(getLifetimeTotals(hanson.id)).toEqual({ pushups: 100, situps: 40 });
     });
   });
 
