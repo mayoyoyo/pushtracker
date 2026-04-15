@@ -946,7 +946,7 @@ async function renderCamera(app) {
         <div class="camera-feed">
           <video id="cam-video" playsinline autoplay muted></video>
           <canvas id="cam-canvas"></canvas>
-          <div id="cam-gate-border" style="position:absolute;top:0;left:0;right:0;bottom:var(--cam-bar-height);border:6px solid #fc8181;border-radius:8px;pointer-events:none;transition:border-color 0.15s"></div>
+          <div id="cam-gate-border" style="position:absolute;inset:0;border:6px solid #fc8181;pointer-events:none;transition:border-color 0.15s"></div>
           <div style="position:absolute;top:16px;right:16px;display:flex;gap:8px;align-items:center">
             <div style="background:rgba(0,0,0,0.5);backdrop-filter:blur(8px);border-radius:20px;padding:6px 12px;font-size:12px;font-weight:600;color:#fff;display:flex;align-items:center;gap:6px">
               ${mode === 'opm' ? '<img src="/opm-fist.png" style="width:14px;height:14px">' : mode === 'situp' ? '<span style="font-size:12px">🙆</span>' : '<span style="font-size:12px">👊</span>'}
@@ -965,16 +965,16 @@ async function renderCamera(app) {
             <div style="font-size:24px;font-weight:700;text-shadow:0 2px 8px rgba(0,0,0,0.8)">Daily complete!</div>
             <div style="font-size:14px;color:rgba(255,255,255,0.7);margin-top:4px">Keep going for extra credit</div>
           </div>
-          <div style="position:absolute;bottom:70px;left:0;right:0;padding:20px;text-align:center;background:linear-gradient(transparent, #000)">
+          <div style="position:absolute;bottom:0;left:0;right:0;padding:20px;text-align:center;background:linear-gradient(transparent, #000)">
             <div id="cam-count" style="font-size:72px;font-weight:900;letter-spacing:-3px;line-height:1;color:#fff;text-shadow:0 2px 12px rgba(0,0,0,0.5)">0</div>
             <div style="font-size:14px;color:rgba(255,255,255,0.7);margin-top:2px">Reps</div>
             <div id="cam-timer" style="font-size:20px;font-weight:600;color:rgba(255,255,255,0.9);margin-top:4px;font-variant-numeric:tabular-nums">00:00</div>
           </div>
-          <div id="cam-bottom-bar" style="position:absolute;bottom:0;left:0;right:0;padding:12px 16px;padding-bottom:var(--cam-pad-bottom);background:#000;display:flex;align-items:center;gap:8px">
-            <div style="flex:0 0 60px"></div>
-            <button class="btn ${stopBtnClass}" id="cam-stop" style="flex:1;max-width:260px;margin:0 auto;padding:14px">Stop & Save</button>
-            <button class="prod-btn" id="cam-flip" title="Flip camera" style="flex:0 0 60px;height:40px;border-radius:20px"><i data-lucide="switch-camera" style="width:18px;height:18px"></i></button>
-          </div>
+        </div>
+        <div id="cam-bottom-bar" style="flex:0 0 auto;padding:12px 16px;padding-bottom:max(12px, env(safe-area-inset-bottom));background:#000;display:flex;align-items:center;gap:8px">
+          <div style="flex:0 0 60px"></div>
+          <button class="btn ${stopBtnClass}" id="cam-stop" style="flex:1;max-width:260px;margin:0 auto;padding:14px">Stop & Save</button>
+          <button class="prod-btn" id="cam-flip" title="Flip camera" style="flex:0 0 60px;height:40px;border-radius:20px"><i data-lucide="switch-camera" style="width:18px;height:18px"></i></button>
         </div>
       </div>
     `;
