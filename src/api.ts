@@ -192,6 +192,11 @@ export async function handleApiRequest(req: Request): Promise<Response> {
         met: i === 'S' || i === 'F' || i === 'U',
         mode: i === 'S' ? 'opm' : i === 'U' ? 'situp' : i === 'F' ? 'standard' : 'manual',
       }));
+      // The last day the boundary-advanced over (i.e. yesterday, or the most
+      // recent past completed day). Null for users who've never had a day
+      // roll up. Used by the team view to render 🧊 in the streak slot when
+      // the previous day was a miss, overriding the hot-streak display.
+      const prev_day_icon = pastIcons.length > 0 ? pastIcons[pastIcons.length - 1] : null;
 
       let streakCount = u.streak;
       if (todayMet && streakCount > 0) streakCount++;
@@ -206,6 +211,7 @@ export async function handleApiRequest(req: Request): Promise<Response> {
         debt: u.debt,
         last5days,
         ever_logged: everLogged,
+        prev_day_icon,
         streak: { count: streakCount, type: streakCount > 0 ? 'hot' : 'none' },
       };
     });
