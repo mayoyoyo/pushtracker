@@ -7,28 +7,18 @@ async function loadPose() {
   return poseModule;
 }
 
-// iOS PWA audio plumbing. The parts that matter:
-// 1. navigator.audioSession.type = "playback" routes WebAudio through the
-//    media channel so the physical silent switch doesn't mute it. Set
-//    eagerly on load (not lazily) — iOS sometimes ignores it if set after
-//    the first audio API call.
-// 2. AudioContext.resume() must be called synchronously inside a user
-//    gesture on iOS, so we attach one-shot unlock listeners.
-// 3. On first unlock we play a near-silent (gain=0.001, 10ms) WebAudio
-//    tone to push an actual buffer through ctx.destination. Without this,
-//    iOS sometimes never commits the audioSession routing, so subsequent
-//    real sounds hit a dead output. `ctx.resume()` alone is not enough.
-// 4. Silent looping <audio> keeps the iOS audio session from auto-
-//    suspending between gestures and on backgrounding.
-// 5. visibilitychange re-resumes + re-primes when returning from
-//    background/lock, and each sound-play checks ctx.state defensively.
-if ('audioSession' in navigator) {
-  try { navigator.audioSession.type = 'playback'; } catch {}
-}
-
+// iOS PWA audio plumbing. iOS freezes PWAs on exit without firing any
+// lifecycle events we can intercept (confirmed via on-device debug —
+// pagehide did NOT fire, teardown stayed at 0). So the JS audioCtx
+// reference can outlive the native audio device, and resume() on that
+// corpse fails with "Failed to start the audio device" forever.
+//
+// Approach: don't rely on exit-time cleanup. Instead, detect the dead
+// ctx inside unlockAudio and rebuild it synchronously within the user
+// gesture. Every tap = a chance to recover.
 let audioCtx = null;
 let silentSource = null;
-let audioDebug = { unlocked: 0, primed: 0, resumed: 0, teardowns: 0, lastErr: '' };
+let audioDebug = { unlocked: 0, primed: 0, resumed: 0, teardowns: 0, rebuilds: 0, lastEvt: '', lastErr: '' };
 window.audioDebug = audioDebug;
 
 function getAudioContext() {
@@ -75,12 +65,9 @@ function ensureSilentSource() {
   } catch (e) { audioDebug.lastErr = 'silent:' + (e?.message || e); }
 }
 
-// Close the AudioContext entirely on pagehide / hidden so iOS can't
-// freeze it into a dead state that later fails to resume with
-// "Failed to start the audio device". On the next user interaction
-// we'll rebuild from scratch.
-function teardownAudio() {
+function teardownAudio(tag) {
   audioDebug.teardowns++;
+  audioDebug.lastEvt = tag || 'teardown';
   if (audioCtx) {
     try { audioCtx.close(); } catch {}
     audioCtx = null;
@@ -88,16 +75,45 @@ function teardownAudio() {
   silentSource = null;
 }
 
-// Idempotent — safe to call on every gesture. Listeners are NOT self-
-// removed, so any tap after background/thaw re-runs the full setup.
+// Synchronously close + recreate the ctx inside a user gesture. This is
+// the ONLY recovery path that actually works on iOS PWA freeze/thaw,
+// since none of the lifecycle events fire reliably for us to tear down
+// in advance.
+function rebuildCtxInGesture() {
+  audioDebug.rebuilds++;
+  if (audioCtx) {
+    try { audioCtx.close(); } catch {}
+  }
+  audioCtx = null;
+  silentSource = null;
+  return getAudioContext();
+}
+
 function unlockAudio() {
   audioDebug.unlocked++;
-  const ctx = getAudioContext();
+
+  // Set audioSession.type inside the gesture — some iOS versions only
+  // honor it when called during a user activation, not at page load.
+  if ('audioSession' in navigator) {
+    try { navigator.audioSession.type = 'playback'; } catch {}
+  }
+
+  // If we have a ctx that's NOT running, assume it might be dead from
+  // freeze/thaw and rebuild synchronously inside this gesture. The new
+  // ctx's resume() below is then called fresh, within user activation.
+  let ctx = audioCtx;
+  if (ctx && ctx.state !== 'running') {
+    ctx = rebuildCtxInGesture();
+  } else if (!ctx) {
+    ctx = getAudioContext();
+  }
+
   if (ctx.state === 'running') {
     primeAudioOutput();
     ensureSilentSource();
     return;
   }
+
   ctx.resume().then(
     () => {
       audioDebug.resumed++;
@@ -111,10 +127,20 @@ document.addEventListener('touchend', unlockAudio, true);
 document.addEventListener('click', unlockAudio, true);
 document.addEventListener('keydown', unlockAudio, true);
 
-window.addEventListener('pagehide', teardownAudio);
+// Cast a wide net for teardown opportunities. iOS has been observed to
+// skip pagehide on PWA exit, so we also listen for pageshow (with the
+// persisted flag for bfcache-like restores) and the Page Lifecycle API
+// freeze event. Whatever fires first wins; unlockAudio's in-gesture
+// rebuild is the final safety net.
+window.addEventListener('pagehide', () => teardownAudio('pagehide'));
+window.addEventListener('pageshow', (e) => {
+  audioDebug.lastEvt = 'pageshow:' + (e.persisted ? 'persisted' : 'fresh');
+  if (e.persisted) teardownAudio('pageshow-persisted');
+});
+document.addEventListener('freeze', () => teardownAudio('freeze'));
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') {
-    teardownAudio();
+    teardownAudio('visibilitychange-hidden');
   } else if (document.visibilityState === 'visible' && audioCtx) {
     audioCtx.resume().then(() => { primeAudioOutput(); ensureSilentSource(); }).catch(() => {});
   }
@@ -1032,7 +1058,8 @@ function showTutorial(onStart) {
       `ctx:${ctx?.state || 'none'}  session:${hasAudioSession}/${sessType}  ` +
       `silent:${silent}  mode:${standalone}\n` +
       `unlock:${d.unlocked||0}  resume:${d.resumed||0}  prime:${d.primed||0}  ` +
-      `teardown:${d.teardowns||0}  err:${d.lastErr || '-'}`;
+      `rebuild:${d.rebuilds||0}  teardown:${d.teardowns||0}\n` +
+      `evt:${d.lastEvt || '-'}  err:${d.lastErr || '-'}`;
   })();
 
   initIcons();
