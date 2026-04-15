@@ -7,14 +7,25 @@ async function loadPose() {
   return poseModule;
 }
 
-// iOS PWA audio plumbing. Three parts, all necessary for sound to work when
-// installed to the home screen:
+// iOS PWA audio plumbing. The parts that matter:
 // 1. navigator.audioSession.type = "playback" routes WebAudio through the
-//    media channel, so the physical silent switch doesn't mute it.
-// 2. AudioContext.resume() must happen inside a user-gesture handler on iOS,
-//    so we attach one-shot unlock listeners and tear them down after first fire.
-// 3. A silent looping <audio> keeps the iOS audio session from auto-suspending
-//    on long camera sessions / after backgrounding.
+//    media channel so the physical silent switch doesn't mute it. Set
+//    eagerly on load (not lazily) — iOS sometimes ignores it if set after
+//    the first audio API call.
+// 2. AudioContext.resume() must be called synchronously inside a user
+//    gesture on iOS, so we attach one-shot unlock listeners.
+// 3. On first unlock we play a near-silent (gain=0.001, 10ms) WebAudio
+//    tone to push an actual buffer through ctx.destination. Without this,
+//    iOS sometimes never commits the audioSession routing, so subsequent
+//    real sounds hit a dead output. `ctx.resume()` alone is not enough.
+// 4. Silent looping <audio> keeps the iOS audio session from auto-
+//    suspending between gestures and on backgrounding.
+// 5. visibilitychange re-resumes + re-primes when returning from
+//    background/lock, and each sound-play checks ctx.state defensively.
+if ('audioSession' in navigator) {
+  try { navigator.audioSession.type = 'playback'; } catch {}
+}
+
 let audioCtx = null;
 let audioUnlocked = false;
 let silentAudioLoop = null;
@@ -28,9 +39,25 @@ function getAudioContext() {
   }
   return audioCtx;
 }
-// Exposed so pose.js (loaded via dynamic import) shares this context and
-// inherits the iOS PWA unlock + audioSession routing.
 window.getAudioContext = getAudioContext;
+
+function primeAudioOutput() {
+  // Push a near-silent buffer through the destination to commit iOS
+  // audioSession routing. Called inside unlock gestures and on
+  // visibilitychange, since the routing can drop on backgrounding.
+  try {
+    const ctx = getAudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    gain.gain.value = 0.001;
+    osc.frequency.value = 440;
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.01);
+  } catch {}
+}
+window.primeAudioOutput = primeAudioOutput;
 
 function startSilentLoop() {
   if (silentAudioLoop) return;
@@ -38,7 +65,6 @@ function startSilentLoop() {
   audio.setAttribute('x-webkit-airplay', 'deny');
   audio.preload = 'auto';
   audio.loop = true;
-  // Minimal valid looping WAV (silent, 8kHz mono 8-bit)
   audio.src = 'data:audio/wav;base64,UklGRjIAAABXQVZFZm10IBIAAAABAAEAQB8AAEAfAAABAAgAAABmYWN0BAAAAAEAAABkYXRhAQAAAIA=';
   audio.play().then(() => { silentAudioLoop = audio; }).catch(() => {});
 }
@@ -49,6 +75,7 @@ function unlockAudio() {
   startSilentLoop();
   const ctx = getAudioContext();
   ctx.resume().catch(() => {});
+  primeAudioOutput();
   document.removeEventListener('touchend', unlockAudio, true);
   document.removeEventListener('click', unlockAudio, true);
   document.removeEventListener('keydown', unlockAudio, true);
@@ -59,7 +86,7 @@ document.addEventListener('keydown', unlockAudio, true);
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && audioCtx) {
-    audioCtx.resume().catch(() => {});
+    audioCtx.resume().then(() => primeAudioOutput()).catch(() => {});
     if (silentAudioLoop) silentAudioLoop.play().catch(() => {});
   }
 });
