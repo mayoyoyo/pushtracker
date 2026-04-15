@@ -276,9 +276,15 @@ body {
 }
 .team-member {
   border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 12px 14px; margin-bottom: 8px;
+  margin-bottom: 8px;
+  overflow: hidden; /* clip child rounding into card border */
+}
+.team-member-header {
+  padding: 12px 14px;
   display: flex; justify-content: space-between; align-items: center;
 }
+.team-member.expandable .team-member-header { cursor: pointer; }
+.team-member.expandable .team-member-header:hover { background: var(--surface-2); }
 .member-name { font-size: 14px; font-weight: 600; }
 .member-target { font-size: 12px; color: var(--text-muted); }
 .member-debt { font-size: 12px; color: var(--danger); }
@@ -286,6 +292,73 @@ body {
 .member-progress.complete { color: var(--success); }
 .member-progress.in-progress { color: var(--warning); }
 .member-progress.not-started { color: var(--text-muted); }
+
+/* Right side of the header: progress + chevron affordance. */
+.team-member-right {
+  display: flex; align-items: center; gap: 10px;
+}
+.team-chevron {
+  width: 16px; height: 16px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  transition: transform 220ms ease;
+}
+.team-member.open .team-chevron { transform: rotate(180deg); }
+
+/* Expanded team card: last5 row, today breakdown bar, legend. Uses the
+   grid-template-rows 0fr→1fr trick for a CSS-only open/close that adapts
+   to arbitrary inner content height. Three-level nesting is deliberate:
+   - .member-expanded: the animated grid container (height: 0 → auto)
+   - .member-expanded-wrap: owns overflow:hidden + min-height:0 so the
+     grid child collapses cleanly. Zero padding/border of its own.
+   - .member-expanded-inner: holds padding + top border + bg. The outer
+     wrap's overflow clips these when the grid row is squeezed, so no
+     "peek" of padding area remains when collapsed. */
+.team-member .member-expanded {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 220ms ease;
+}
+.team-member.open .member-expanded {
+  grid-template-rows: 1fr;
+}
+.member-expanded-wrap {
+  overflow: hidden;
+  min-height: 0;
+}
+.member-expanded-inner {
+  padding: 10px 14px 14px;
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 50%, transparent);
+}
+.expanded-row {
+  display: flex; align-items: center; gap: 10px;
+  min-height: 22px; margin-bottom: 8px;
+}
+.expanded-row:last-child { margin-bottom: 0; }
+.expanded-label {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
+  color: var(--text-muted); width: 48px; flex-shrink: 0;
+}
+.expanded-icons {
+  font-size: 14px; letter-spacing: 1px;
+  display: flex; align-items: center; gap: 2px;
+}
+.expanded-bar {
+  flex: 1; height: 6px; background: var(--surface-2);
+  border-radius: 3px; overflow: hidden; display: flex;
+}
+.expanded-bar .seg { height: 100%; }
+.expanded-empty { font-size: 11px; color: var(--text-muted); font-style: italic; }
+.expanded-legend {
+  display: flex; flex-wrap: wrap; gap: 8px 14px;
+  padding-left: 58px; margin-top: 4px;
+}
+.legend-item {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; color: var(--text-dim);
+}
+.legend-item strong { color: var(--text); font-weight: 600; }
 
 /* Settings */
 .settings-panel {

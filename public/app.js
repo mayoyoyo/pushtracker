@@ -492,16 +492,76 @@ function renderDashboard(app, data) {
           }
           const mSurplus = Math.max(0, m.today_total - m.daily_target);
           const mRemainingDebt = Math.max(0, m.debt - Math.min(mSurplus, m.debt));
-          return `
-            <div class="team-member">
-              <div>
-                <div class="member-name">${m.username} <span style="font-size:14px;letter-spacing:1px">${streakIcons(m.last5days)}</span></div>
-                <div class="member-target">${!m.ever_logged ? '<span style="font-size:11px;color:var(--text-dim)">not started</span>' : `${streakText(m.streak)}${mRemainingDebt > 0 ? `<span style="font-size:11px;color:var(--danger);margin-left:${m.streak.count > 0 ? '4' : '0'}px">(${mRemainingDebt} debt)</span>` : ''}`}</div>
+
+          // Expanded: last5 icon row + today breakdown bar + legend. Only
+          // shown for members who have ever logged — non-starters have
+          // nothing to show and no reason to be clickable.
+          const byMode = m.today_by_mode || { opm: 0, situp: 0, standard: 0 };
+          const tgt = m.daily_target || 1;
+          const hasTodayReps = (byMode.opm + byMode.situp + byMode.standard) > 0;
+          let opmW   = (byMode.opm      / tgt) * 100;
+          let situpW = (byMode.situp    / tgt) * 100;
+          let stdW   = (byMode.standard / tgt) * 100;
+          const sumW = opmW + situpW + stdW;
+          if (sumW > 100) { const k = 100 / sumW; opmW *= k; situpW *= k; stdW *= k; }
+
+          const expanded = m.ever_logged ? `
+            <div class="member-expanded">
+              <div class="member-expanded-wrap">
+                <div class="member-expanded-inner">
+                  <div class="expanded-row">
+                    <div class="expanded-label">Last 5</div>
+                    <div class="expanded-icons">${streakIcons(m.last5days)}</div>
+                  </div>
+                  <div class="expanded-row">
+                    <div class="expanded-label">Today</div>
+                    ${hasTodayReps ? `
+                      <div class="expanded-bar">
+                        ${opmW   > 0 ? `<div class="seg seg-opm"   style="width:${opmW}%"></div>`   : ''}
+                        ${situpW > 0 ? `<div class="seg seg-situp" style="width:${situpW}%"></div>` : ''}
+                        ${stdW   > 0 ? `<div class="seg seg-std"   style="width:${stdW}%"></div>`   : ''}
+                      </div>
+                    ` : '<span class="expanded-empty">No reps yet</span>'}
+                  </div>
+                  ${hasTodayReps ? `
+                    <div class="expanded-legend">
+                      ${byMode.opm      > 0 ? `<div class="legend-item"><span class="breakdown-dot seg-dot-opm"></span>One Punch <strong>${byMode.opm}</strong></div>` : ''}
+                      ${byMode.situp    > 0 ? `<div class="legend-item"><span class="breakdown-dot seg-dot-situp"></span>Sit-up <strong>${byMode.situp}</strong></div>` : ''}
+                      ${byMode.standard > 0 ? `<div class="legend-item"><span class="breakdown-dot seg-dot-std"></span>Standard <strong>${byMode.standard}</strong></div>` : ''}
+                    </div>
+                  ` : ''}
+                </div>
               </div>
-              <div class="member-progress ${statusClass}">${display}</div>
+            </div>` : '';
+
+          return `
+            <div class="team-member${m.ever_logged ? ' expandable' : ''}" data-member-id="${m.id}">
+              <div class="team-member-header">
+                <div>
+                  <div class="member-name">${m.username}</div>
+                  <div class="member-target">${!m.ever_logged ? '<span style="font-size:11px;color:var(--text-dim)">not started</span>' : `${streakText(m.streak)}${mRemainingDebt > 0 ? `<span style="font-size:11px;color:var(--danger);margin-left:${m.streak.count > 0 ? '4' : '0'}px">(${mRemainingDebt} debt)</span>` : ''}`}</div>
+                </div>
+                <div class="team-member-right">
+                  <div class="member-progress ${statusClass}">${display}</div>
+                  ${m.ever_logged ? '<i data-lucide="chevron-down" class="team-chevron"></i>' : ''}
+                </div>
+              </div>
+              ${expanded}
             </div>`;
         }).join('')}
       `;
+
+      // Accordion: clicking a header opens it and closes any currently
+      // open sibling. Click again to close. Non-expandable rows (not yet
+      // started) do nothing.
+      app.querySelectorAll('.team-member.expandable .team-member-header').forEach(header => {
+        header.addEventListener('click', () => {
+          const card = header.parentElement;
+          const wasOpen = card.classList.contains('open');
+          app.querySelectorAll('.team-member.open').forEach(c => c.classList.remove('open'));
+          if (!wasOpen) card.classList.add('open');
+        });
+      });
 
       bindTabs();
       initIcons();
