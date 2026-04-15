@@ -946,7 +946,7 @@ async function renderCamera(app) {
         <div class="camera-feed">
           <video id="cam-video" playsinline autoplay muted></video>
           <canvas id="cam-canvas"></canvas>
-          <div id="cam-gate-border" style="position:absolute;inset:0;border:6px solid #fc8181;pointer-events:none;transition:border-color 0.15s"></div>
+          <div id="cam-gate-border" style="position:absolute;inset:0;border:6px solid #fc8181;pointer-events:none;z-index:5;transition:border-color 0.15s"></div>
           <div style="position:absolute;top:16px;right:16px;display:flex;gap:8px;align-items:center">
             <div style="background:rgba(0,0,0,0.5);backdrop-filter:blur(8px);border-radius:20px;padding:6px 12px;font-size:12px;font-weight:600;color:#fff;display:flex;align-items:center;gap:6px">
               ${mode === 'opm' ? '<img src="/opm-fist.png" style="width:14px;height:14px">' : mode === 'situp' ? '<span style="font-size:12px">🙆</span>' : '<span style="font-size:12px">👊</span>'}
