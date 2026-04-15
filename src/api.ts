@@ -175,8 +175,16 @@ export async function handleApiRequest(req: Request): Promise<Response> {
       const prevBoundary = getPreviousDayBoundary(u.timezone, u.next_day_boundary);
       const todayTotal = getTodayTotal(u.id, prevBoundary, u.next_day_boundary);
       const todayMet = u.daily_target > 0 && todayTotal >= u.daily_target;
-      const todayLogs = todayMet ? getTodayLogs(u.id, prevBoundary, u.next_day_boundary) : [];
+      // Fetch logs unconditionally now — the expanded team card needs the
+      // per-mode breakdown even for partial (not-yet-met) days.
+      const todayLogs = getTodayLogs(u.id, prevBoundary, u.next_day_boundary);
       const todayIcon = pickDayIcon(todayLogs, u.daily_target);
+      const today_by_mode = { opm: 0, situp: 0, standard: 0 };
+      for (const log of todayLogs) {
+        if (log.mode === 'opm') today_by_mode.opm += log.count;
+        else if (log.mode === 'situp') today_by_mode.situp += log.count;
+        else today_by_mode.standard += log.count;
+      }
       const everLogged = hasEverLoggedPushups(u.id);
       const pastIcons = u.last5 ? u.last5.split(',') : [];
       const allIcons = everLogged ? (todayMet ? [...pastIcons, todayIcon] : pastIcons).slice(-5) : [];
@@ -194,6 +202,7 @@ export async function handleApiRequest(req: Request): Promise<Response> {
         username: u.username,
         daily_target: u.daily_target,
         today_total: todayTotal,
+        today_by_mode,
         debt: u.debt,
         last5days,
         ever_logged: everLogged,
