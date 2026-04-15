@@ -733,6 +733,7 @@ function showManualEntry() {
         <input type="number" id="step-input" inputmode="numeric" style="display:none;width:70px;font-size:36px;font-weight:700;text-align:center;background:transparent;border:1px solid var(--border);border-radius:var(--radius);color:var(--text);outline:none;letter-spacing:-1px" value="${count}">
         <button id="step-up">+</button>
       </div>
+      <p style="font-size:11px;color:var(--text-muted);text-align:center;margin:-8px 0 14px">Tap the number to type it</p>
       <button class="btn btn-primary" style="width:100%;margin-bottom:10px" id="step-save">Save</button>
       <button class="btn btn-surface" style="width:100%" id="step-cancel">Cancel</button>
     </div>
