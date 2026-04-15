@@ -2,7 +2,7 @@ import { signup, login, logout, switchSession, getSessionUser, parseSessionToken
 import { logPushups, getTodayLogs, getTodayTotal, getResolvedTeamByGroup, updateTarget, updateDebt, updateTimezone, getGroupName, getMonthResults, hasEverLoggedPushups, getSlackConfig, getDiscordConfig, getLifetimeTotals, getPairedUserForId, type User } from "./db";
 import { getNextDayBoundary, getPreviousDayBoundary } from "./timezone";
 import { processExpiredBoundaries } from "./cron";
-import { pickDayIcon } from "./day-icon";
+import { pickDayIcon, computeStreakDisplay } from "./day-icon";
 
 function json(data: unknown, status = 200, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(data), {
@@ -102,10 +102,14 @@ export async function handleApiRequest(req: Request): Promise<Response> {
       mode: i === 'S' ? 'opm' : i === 'U' ? 'situp' : i === 'F' ? 'standard' : 'manual',
     }));
 
-    // Streak: user.streak is from completed days, add 1 if today is met and streak was going
-    let streakCount = user.streak;
-    if (todayMet && streakCount > 0) streakCount++;
-    else if (todayMet) streakCount = 1;
+    // Streak slot: shared helper in src/day-icon.ts so /api/me and
+    // /api/team/today agree, and the decision is unit-tested in isolation.
+    const streak = computeStreakDisplay({
+      stored_streak: user.streak,
+      last5: user.last5,
+      today_total: todayTotal,
+      daily_target: user.daily_target,
+    });
 
     const hasSlack = getSlackConfig(user.invite_code) !== null;
     const hasDiscord = getDiscordConfig(user.invite_code) !== null;
@@ -123,7 +127,7 @@ export async function handleApiRequest(req: Request): Promise<Response> {
       has_slack: hasSlack,
       has_discord: hasDiscord,
       paired_username: paired?.username ?? null,
-      streak: { count: streakCount, type: streakCount > 0 ? 'hot' : 'none' },
+      streak,
     });
   }
 
@@ -204,15 +208,13 @@ export async function handleApiRequest(req: Request): Promise<Response> {
         met: i === 'S' || i === 'F' || i === 'U',
         mode: i === 'S' ? 'opm' : i === 'U' ? 'situp' : i === 'F' ? 'standard' : 'manual',
       }));
-      // The last day the boundary-advanced over (i.e. yesterday, or the most
-      // recent past completed day). Null for users who've never had a day
-      // roll up. Used by the team view to render 🧊 in the streak slot when
-      // the previous day was a miss, overriding the hot-streak display.
-      const prev_day_icon = pastIcons.length > 0 ? pastIcons[pastIcons.length - 1] : null;
 
-      let streakCount = u.streak;
-      if (todayMet && streakCount > 0) streakCount++;
-      else if (todayMet) streakCount = 1;
+      const streak = computeStreakDisplay({
+        stored_streak: u.streak,
+        last5: u.last5,
+        today_total: todayTotal,
+        daily_target: u.daily_target,
+      });
 
       return {
         id: u.id,
@@ -223,8 +225,7 @@ export async function handleApiRequest(req: Request): Promise<Response> {
         debt: u.debt,
         last5days,
         ever_logged: everLogged,
-        prev_day_icon,
-        streak: { count: streakCount, type: streakCount > 0 ? 'hot' : 'none' },
+        streak,
       };
     });
     return json({ group_name: groupName, team });
