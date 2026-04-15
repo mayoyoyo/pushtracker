@@ -28,7 +28,7 @@ export function buildDayResultEmbed(
   const debtSuffix = debt > 0 ? ` (${debt} debt)` : "";
 
   const fields: DiscordEmbedField[] = [
-    { name: "Pushups", value: `${total} / ${target} ${icon}${debtSuffix}`, inline: true },
+    { name: "Pushups", value: `${icon} ${total} / ${target}${debtSuffix}`, inline: true },
     { name: "Streak", value: streakValue, inline: true },
   ];
 
