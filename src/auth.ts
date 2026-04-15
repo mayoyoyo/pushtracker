@@ -5,9 +5,13 @@ export async function signup(username: string, passcode: string, timezone: strin
   if (!/^\d{4}$/.test(passcode)) {
     throw new Error("Passcode must be exactly 4 digits");
   }
+  const name = (username || '').trim();
+  if (!/^[A-Za-z0-9]{1,15}$/.test(name)) {
+    throw new Error("Username must be 1–15 alphanumeric characters");
+  }
   const code = (inviteCode || '').toUpperCase().trim();
-  if (code.length !== 4) {
-    throw new Error("Invite code must be 4 characters");
+  if (!/^[A-Z0-9]{4}$/.test(code)) {
+    throw new Error("Invite code must be 4 alphanumeric characters");
   }
   if (!validateInviteCode(code)) {
     throw new Error("Invalid invite code");
@@ -15,7 +19,7 @@ export async function signup(username: string, passcode: string, timezone: strin
   const hashedPasscode = await Bun.password.hash(passcode);
   const nowUtc = new Date().toISOString();
   const nextBoundary = getNextDayBoundary(timezone, nowUtc);
-  const user = createUser(username.toLowerCase(), hashedPasscode, timezone, nextBoundary, code);
+  const user = createUser(name.toLowerCase(), hashedPasscode, timezone, nextBoundary, code);
   const token = generateToken();
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
   createSession(token, user.id, expiresAt);
