@@ -191,6 +191,22 @@ export function linkAlias(aliasId: number, sourceId: number): void {
   db.prepare("UPDATE users SET source_user_id = ? WHERE id = ?").run(sourceId, aliasId);
 }
 
+// The "other side" of an alias pair. Given any user id:
+//   - if the user is an alias (source_user_id IS NOT NULL), returns the source
+//   - if the user is a source (source_user_id IS NULL), returns the alias row
+//     that points at it (if any)
+//   - otherwise returns null
+// Powers the account-switch button: it's only shown when this returns non-null,
+// and the switch endpoint uses the returned user as the new session target.
+export function getPairedUserForId(userId: number): User | null {
+  const raw = db.prepare("SELECT * FROM users WHERE id = ?").get(userId) as User | null;
+  if (!raw) return null;
+  if (raw.source_user_id != null) {
+    return db.prepare("SELECT * FROM users WHERE id = ?").get(raw.source_user_id) as User | null;
+  }
+  return db.prepare("SELECT * FROM users WHERE source_user_id = ? LIMIT 1").get(userId) as User | null;
+}
+
 export function createUser(username: string, passcode: string, timezone: string, nextDayBoundary: string, inviteCode: string): User {
   const stmt = db.prepare(
     "INSERT INTO users (username, passcode, daily_target, timezone, next_day_boundary, invite_code) VALUES (?, ?, 20, ?, ?, ?) RETURNING *"

@@ -1,5 +1,5 @@
-import { signup, login, logout, getSessionUser, parseSessionToken, sessionCookie, clearSessionCookie } from "./auth";
-import { logPushups, getTodayLogs, getTodayTotal, getResolvedTeamByGroup, updateTarget, updateDebt, updateTimezone, getGroupName, getMonthResults, hasEverLoggedPushups, getSlackConfig, getDiscordConfig, getLifetimeTotals, type User } from "./db";
+import { signup, login, logout, switchSession, getSessionUser, parseSessionToken, sessionCookie, clearSessionCookie } from "./auth";
+import { logPushups, getTodayLogs, getTodayTotal, getResolvedTeamByGroup, updateTarget, updateDebt, updateTimezone, getGroupName, getMonthResults, hasEverLoggedPushups, getSlackConfig, getDiscordConfig, getLifetimeTotals, getPairedUserForId, type User } from "./db";
 import { getNextDayBoundary, getPreviousDayBoundary } from "./timezone";
 import { processExpiredBoundaries } from "./cron";
 import { pickDayIcon } from "./day-icon";
@@ -70,6 +70,14 @@ export async function handleApiRequest(req: Request): Promise<Response> {
     return json({ ok: true }, 200, { "set-cookie": clearSessionCookie() });
   }
 
+  if (path === "/api/auth/switch" && method === "POST") {
+    const result = switchSession(token);
+    if (!result) return json({ error: "No paired account" }, 403);
+    return json({ user: publicUserData(result.user) }, 200, {
+      "set-cookie": sessionCookie(result.token),
+    });
+  }
+
   if (path === "/api/me" && method === "GET") {
     const prevBoundary = getPreviousDayBoundary(user.timezone, user.next_day_boundary);
     const todayTotal = getTodayTotal(user.id, prevBoundary, user.next_day_boundary);
@@ -101,6 +109,9 @@ export async function handleApiRequest(req: Request): Promise<Response> {
 
     const hasSlack = getSlackConfig(user.invite_code) !== null;
     const hasDiscord = getDiscordConfig(user.invite_code) !== null;
+    // Paired (alias) account, if any. Powers the "Switch to X" button in
+    // settings: only shown when a pair exists.
+    const paired = getPairedUserForId(user.id);
     return json({
       ...publicUserData(user),
       today_total: todayTotal,
@@ -111,6 +122,7 @@ export async function handleApiRequest(req: Request): Promise<Response> {
       last5days,
       has_slack: hasSlack,
       has_discord: hasDiscord,
+      paired_username: paired?.username ?? null,
       streak: { count: streakCount, type: streakCount > 0 ? 'hot' : 'none' },
     });
   }

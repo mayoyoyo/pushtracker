@@ -78,6 +78,7 @@ function renderAuth(app) {
   function render() {
     app.innerHTML = `
       <div class="auth-screen">
+        <img src="/opm-fist.png" class="logo-fist" alt="">
         <div class="logo">PushTracker</div>
         <div class="subtitle">Hold each other accountable</div>
         <form class="auth-form" id="auth-form">
@@ -673,7 +674,14 @@ function showSettings() {
         <span class="lifetime-value" id="lifetime-situps">…</span>
       </div>
       <button class="btn btn-primary" style="width:100%;margin-top:16px;margin-bottom:10px" id="set-save">Save</button>
-      <button class="btn btn-danger" style="width:100%" id="set-logout">Log Out</button>
+      ${currentUser.paired_username ? `
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-primary" style="flex:1" id="set-switch">Switch to ${currentUser.paired_username}</button>
+          <button class="btn btn-danger" style="flex:1" id="set-logout">Log Out</button>
+        </div>
+      ` : `
+        <button class="btn btn-danger" style="width:100%" id="set-logout">Log Out</button>
+      `}
     </div>
   `;
   document.body.appendChild(overlay); initIcons();
@@ -702,6 +710,18 @@ function showSettings() {
     overlay.remove();
     showScreen('auth');
   });
+  const switchBtn = overlay.querySelector('#set-switch');
+  if (switchBtn) {
+    switchBtn.addEventListener('click', async () => {
+      try {
+        await api('POST', '/api/auth/switch');
+        overlay.remove();
+        await loadDashboard();
+      } catch (e) {
+        showToast('Switch failed');
+      }
+    });
+  }
   overlay.querySelector('#set-close').addEventListener('click', () => overlay.remove());
   overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 }

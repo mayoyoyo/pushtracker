@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach } from "bun:test";
-import { getDb, linkAlias, updateTarget, updateDebt } from "../src/db";
-import { signup, login, getSessionUser, logout } from "../src/auth";
+import { getDb, linkAlias, updateTarget, updateDebt, getPairedUserForId, createUser, createSession } from "../src/db";
+import { signup, login, getSessionUser, logout, switchSession } from "../src/auth";
 
 describe("auth", () => {
   beforeEach(() => {
@@ -93,6 +93,80 @@ describe("auth", () => {
       const { token } = await signup("hanson", "1234", "America/New_York", "DEV0");
       logout(token);
       expect(getSessionUser(token)).toBeNull();
+    });
+  });
+
+  describe("getPairedUserForId", () => {
+    test("returns null for a user with no alias pair", () => {
+      const user = createUser("solo", "h", "UTC", "2026-04-15T00:00:00Z", "DEV0");
+      expect(getPairedUserForId(user.id)).toBeNull();
+    });
+
+    test("returns the source when called with the alias id", () => {
+      const hanson = createUser("hanson", "h", "UTC", "2026-04-15T00:00:00Z", "FRST");
+      const mayo   = createUser("mayo",   "h", "UTC", "2026-04-15T00:00:00Z", "DEV0");
+      linkAlias(mayo.id, hanson.id);
+      const paired = getPairedUserForId(mayo.id);
+      expect(paired?.id).toBe(hanson.id);
+      expect(paired?.username).toBe("hanson");
+    });
+
+    test("returns the alias when called with the source id", () => {
+      const hanson = createUser("hanson", "h", "UTC", "2026-04-15T00:00:00Z", "FRST");
+      const mayo   = createUser("mayo",   "h", "UTC", "2026-04-15T00:00:00Z", "DEV0");
+      linkAlias(mayo.id, hanson.id);
+      const paired = getPairedUserForId(hanson.id);
+      expect(paired?.id).toBe(mayo.id);
+      expect(paired?.username).toBe("mayo");
+    });
+  });
+
+  describe("switchSession", () => {
+    test("rotates session source → alias and invalidates the old token", async () => {
+      const { user: hanson } = await signup("hanson", "1234", "America/New_York", "FRST");
+      const mayo = createUser("mayo", "h", "America/New_York", "2026-04-15T00:00:00Z", "DEV0");
+      linkAlias(mayo.id, hanson.id);
+
+      const first = await login("hanson", "1234");
+      const result = switchSession(first.token);
+
+      expect(result).not.toBeNull();
+      expect(result!.user.id).toBe(mayo.id);
+      expect(result!.user.username).toBe("mayo");
+      expect(result!.token).not.toBe(first.token);
+      expect(getSessionUser(first.token)).toBeNull();
+      const resolved = getSessionUser(result!.token)!;
+      expect(resolved.username).toBe("mayo");
+      expect(resolved.invite_code).toBe("DEV0");
+    });
+
+    test("rotates alias → source via a manually-seeded session", async () => {
+      const { user: hanson } = await signup("hanson", "1234", "America/New_York", "FRST");
+      const mayo = createUser("mayo", "h", "America/New_York", "2026-04-15T00:00:00Z", "DEV0");
+      linkAlias(mayo.id, hanson.id);
+
+      // Seed a session as mayo directly via the exported createSession helper.
+      // Going through getDb() here would reopen a different DB connection and
+      // lose the beforeEach :memory: state.
+      const token = crypto.randomUUID();
+      createSession(token, mayo.id, new Date(Date.now() + 1000 * 60 * 60).toISOString());
+
+      const result = switchSession(token);
+      expect(result).not.toBeNull();
+      expect(result!.user.id).toBe(hanson.id);
+      expect(result!.user.username).toBe("hanson");
+      expect(getSessionUser(token)).toBeNull();
+    });
+
+    test("returns null when the user has no paired account", async () => {
+      const { token } = await signup("solo", "1234", "America/New_York", "DEV0");
+      expect(switchSession(token)).toBeNull();
+      // Original session should still be valid (no-op on failure)
+      expect(getSessionUser(token)?.username).toBe("solo");
+    });
+
+    test("returns null for an invalid token", () => {
+      expect(switchSession("not-a-real-token")).toBeNull();
     });
   });
 });

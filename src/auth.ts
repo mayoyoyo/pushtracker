@@ -1,4 +1,4 @@
-import { createUser, getUserByUsername, getResolvedUserById, createSession, getSession, deleteSession, validateInviteCode, type User } from "./db";
+import { createUser, getUserByUsername, getResolvedUserById, createSession, getSession, deleteSession, validateInviteCode, getPairedUserForId, type User } from "./db";
 import { getNextDayBoundary } from "./timezone";
 
 export async function signup(username: string, passcode: string, timezone: string, inviteCode: string): Promise<{ user: User; token: string }> {
@@ -41,6 +41,22 @@ export function getSessionUser(token: string): User | null {
 
 export function logout(token: string): void {
   deleteSession(token);
+}
+
+// Rotate the current session to the paired alias account (hanson ↔ mayo).
+// No passcode challenge — the caller must already hold a valid session, and
+// alias pairs represent the same real person across two orgs. Returns null
+// if the token is invalid or the current user has no paired account.
+export function switchSession(currentToken: string): { user: User; token: string } | null {
+  const session = getSession(currentToken);
+  if (!session) return null;
+  const paired = getPairedUserForId(session.user_id);
+  if (!paired) return null;
+  deleteSession(currentToken);
+  const token = generateToken();
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  createSession(token, paired.id, expiresAt);
+  return { user: getResolvedUserById(paired.id) ?? paired, token };
 }
 
 function generateToken(): string {
