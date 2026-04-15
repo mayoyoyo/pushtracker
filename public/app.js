@@ -369,6 +369,7 @@ function renderDashboard(app, data) {
       return {
         card:  `border-color:${palette.color};box-shadow:0 0 20px rgba(${palette.rgb},0.15),0 0 60px rgba(${palette.rgb},0.05)`,
         count: `color:${palette.color}`,
+        label: `color:${palette.color}`,
       };
     })() : null;
 
@@ -407,11 +408,11 @@ function renderDashboard(app, data) {
       </div>
       <div class="progress-card" id="progress-card-el" style="${completedStyles ? completedStyles.card : ''}">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <div class="progress-label">${showBack ? 'BREAKDOWN' : (done ? '✓ COMPLETE' : 'Today')}<span class="progress-time-left" id="time-left"></span></div>
+          <div class="progress-label">${showBack ? 'BREAKDOWN' : (done ? `<span style="${completedStyles ? completedStyles.label : ''}">✓ COMPLETE</span>` : 'Today')}<span class="progress-time-left" id="time-left"></span></div>
           ${hasAnyReps ? `<button class="flip-btn" id="flip-btn" aria-label="${showBack ? 'Hide breakdown' : 'Show breakdown'}"><i data-lucide="${showBack ? 'arrow-left' : 'pie-chart'}" style="width:14px;height:14px"></i></button>` : ''}
         </div>
         ${showBack ? backBody : frontBody}
-        ${data.debt > 0 ? `<div style="margin-top:8px;font-size:12px;color:${debtFullyPaid ? '#22c55e' : 'var(--text-muted)'}">${debtFullyPaid ? '✓' : ''} ${debtCovered}/${data.debt} debt covered</div>` : ''}
+        ${data.debt > 0 ? `<div style="margin-top:8px;font-size:12px;color:${debtFullyPaid ? '#22c55e' : 'var(--danger)'}">${debtFullyPaid ? '✓' : ''} ${debtCovered}/${data.debt} debt covered</div>` : ''}
         ${done && (data.has_slack || data.has_discord) ? `<div style="margin-top:${data.debt > 0 ? '4' : '8'}px;font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:5px"><i data-lucide="hash" style="width:12px;height:12px;opacity:0.5"></i> Results posted to ${data.has_slack && data.has_discord ? 'Slack and Discord' : data.has_slack ? 'Slack' : 'Discord'} at 7am</div>` : ''}
       </div>
       ${remainingDebt > 0 ? `
