@@ -43,6 +43,7 @@ body {
   min-height: 80dvh;
   gap: 24px;
 }
+.auth-screen .logo-fist { display: block; width: 80px; height: 80px; margin: 0 auto 12px; object-fit: contain; }
 .auth-screen .logo { font-size: 28px; font-weight: 700; text-align: center; letter-spacing: -0.5px; }
 .auth-screen .subtitle { font-size: 13px; color: var(--text-muted); margin-top: -16px; }
 
