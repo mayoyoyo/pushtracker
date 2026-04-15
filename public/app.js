@@ -7,18 +7,81 @@ async function loadPose() {
   return poseModule;
 }
 
-function playCongratsSound() {
-  function tone(freq, dur, delay) {
-    setTimeout(() => {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const osc = ctx.createOscillator(); const gain = ctx.createGain();
-      osc.frequency.value = freq; gain.gain.value = 0.3;
-      osc.connect(gain); gain.connect(ctx.destination); osc.start();
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
-      osc.stop(ctx.currentTime + dur);
-    }, delay);
+// iOS PWA audio plumbing. Three parts, all necessary for sound to work when
+// installed to the home screen:
+// 1. navigator.audioSession.type = "playback" routes WebAudio through the
+//    media channel, so the physical silent switch doesn't mute it.
+// 2. AudioContext.resume() must happen inside a user-gesture handler on iOS,
+//    so we attach one-shot unlock listeners and tear them down after first fire.
+// 3. A silent looping <audio> keeps the iOS audio session from auto-suspending
+//    on long camera sessions / after backgrounding.
+let audioCtx = null;
+let audioUnlocked = false;
+let silentAudioLoop = null;
+
+function getAudioContext() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if ('audioSession' in navigator) {
+      try { navigator.audioSession.type = 'playback'; } catch {}
+    }
   }
-  tone(523, 0.15, 0); tone(659, 0.15, 180); tone(784, 0.2, 360);
+  return audioCtx;
+}
+
+function startSilentLoop() {
+  if (silentAudioLoop) return;
+  const audio = document.createElement('audio');
+  audio.setAttribute('x-webkit-airplay', 'deny');
+  audio.preload = 'auto';
+  audio.loop = true;
+  // Minimal valid looping WAV (silent, 8kHz mono 8-bit)
+  audio.src = 'data:audio/wav;base64,UklGRjIAAABXQVZFZm10IBIAAAABAAEAQB8AAEAfAAABAAgAAABmYWN0BAAAAAEAAABkYXRhAQAAAIA=';
+  audio.play().then(() => { silentAudioLoop = audio; }).catch(() => {});
+}
+
+function unlockAudio() {
+  if (audioUnlocked) return;
+  audioUnlocked = true;
+  startSilentLoop();
+  const ctx = getAudioContext();
+  ctx.resume().catch(() => {});
+  document.removeEventListener('touchend', unlockAudio, true);
+  document.removeEventListener('click', unlockAudio, true);
+  document.removeEventListener('keydown', unlockAudio, true);
+}
+document.addEventListener('touchend', unlockAudio, true);
+document.addEventListener('click', unlockAudio, true);
+document.addEventListener('keydown', unlockAudio, true);
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && audioCtx) {
+    audioCtx.resume().catch(() => {});
+    if (silentAudioLoop) silentAudioLoop.play().catch(() => {});
+  }
+});
+
+function playCongratsSound() {
+  try {
+    const ctx = getAudioContext();
+    if (ctx.state !== 'running') ctx.resume().catch(() => {});
+    function tone(freq, dur, delay) {
+      setTimeout(() => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.frequency.value = freq;
+        gain.gain.value = 0.3;
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+        osc.stop(ctx.currentTime + dur);
+      }, delay);
+    }
+    tone(523, 0.15, 0);
+    tone(659, 0.15, 180);
+    tone(784, 0.2, 360);
+  } catch {}
 }
 
 async function api(method, path, body) {
