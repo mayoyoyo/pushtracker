@@ -50,8 +50,8 @@ function streakIcons(last5days) {
   return last5days.map(d => {
     if (!d.met) return '🧊';
     if (d.mode === 'opm') return '<img src="/opm-fist.png" style="width:22px;height:22px;vertical-align:middle">';
-    if (d.mode === 'situp') return '💪';
-    return '🔥';
+    if (d.mode === 'situp') return '🙆';
+    return '👊';
   }).join('');
 }
 
@@ -222,8 +222,8 @@ async function renderCalendar(container, userData) {
       let icon = '';
       const metIcon = (mode) => {
         if (mode === 'opm') return '<img src="/opm-fist.png" style="width:14px;height:14px">';
-        if (mode === 'situp') return '💪';
-        return '🔥';
+        if (mode === 'situp') return '🙆';
+        return '👊';
       };
 
       if (isToday && userData.today_total >= userData.daily_target && userData.daily_target > 0) {
@@ -592,14 +592,14 @@ function showSettings() {
       <div class="setting-section-label">Lifetime Totals</div>
       <div class="setting-row">
         <span class="setting-label" style="display:flex;align-items:center;gap:10px">
-          <img src="/opm-fist.png" style="width:16px;height:16px">
+          <span style="font-size:16px">👊</span>
           Push-ups
         </span>
         <span class="lifetime-value" id="lifetime-pushups">…</span>
       </div>
       <div class="setting-row">
         <span class="setting-label" style="display:flex;align-items:center;gap:10px">
-          <span style="font-size:16px">💪</span>
+          <span style="font-size:16px">🙆</span>
           Sit-ups
         </span>
         <span class="lifetime-value" id="lifetime-situps">…</span>
@@ -643,7 +643,7 @@ let cameraMode = 'standard'; // 'standard', 'opm', or 'situp'
 function getModeContent(mode) {
   if (mode === 'situp') return `
     <div style="text-align:center;margin-bottom:20px">
-      <div style="font-size:36px">💪</div>
+      <div style="font-size:36px">🙆</div>
       <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Streak icon</div>
     </div>
     <div style="font-weight:600;margin-bottom:10px;font-size:16px;text-align:center">Setup in 3 steps:</div>
@@ -679,7 +679,7 @@ function getModeContent(mode) {
 
   return `
     <div style="text-align:center;margin-bottom:20px">
-      <div style="font-size:36px">🔥</div>
+      <div style="font-size:36px">👊</div>
       <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Streak icon</div>
     </div>
     <div style="font-weight:600;margin-bottom:10px;font-size:16px;text-align:center">Setup in 3 steps:</div>
@@ -794,7 +794,7 @@ async function renderCamera(app) {
           <canvas id="cam-canvas"></canvas>
           <div style="position:absolute;top:16px;right:16px;display:flex;gap:8px;align-items:center">
             <div style="background:rgba(0,0,0,0.5);backdrop-filter:blur(8px);border-radius:20px;padding:6px 12px;font-size:12px;font-weight:600;color:#fff;display:flex;align-items:center;gap:6px">
-              ${mode === 'opm' ? '<img src="/opm-fist.png" style="width:14px;height:14px">' : mode === 'situp' ? '<span style="font-size:12px">💪</span>' : '<i data-lucide="user" style="width:14px;height:14px"></i>'}
+              ${mode === 'opm' ? '<img src="/opm-fist.png" style="width:14px;height:14px">' : mode === 'situp' ? '<span style="font-size:12px">🙆</span>' : '<span style="font-size:12px">👊</span>'}
               ${mode === 'opm' ? 'One Punch' : mode === 'situp' ? 'Sit-up' : 'Standard'}
             </div>
             <button class="prod-btn" id="cam-help" title="Help">?</button>
