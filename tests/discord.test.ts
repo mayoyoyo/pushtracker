@@ -28,24 +28,24 @@ describe("discord", () => {
       expect(embed.fields[1]).toEqual({ name: "Streak", value: "🔥 1 day", inline: true });
     });
 
-    test("adds a debt field when debt > 0", () => {
+    test("inlines debt into the Pushups field value when debt > 0", () => {
       const embed = buildDayResultEmbed("alice", "April 8, 2026", 15, 20, false, 0, 40);
       expect(embed.fields).toEqual([
-        { name: "Pushups", value: "15 / 20 ❌", inline: true },
+        { name: "Pushups", value: "15 / 20 ❌ (40 debt)", inline: true },
         { name: "Streak", value: "0 days", inline: true },
-        { name: "Debt", value: "40", inline: true },
       ]);
     });
 
-    test("omits the debt field when debt is 0", () => {
+    test("omits the debt suffix when debt is 0", () => {
       const embed = buildDayResultEmbed("bob", "April 8, 2026", 25, 20, true, 3, 0);
       expect(embed.fields.length).toBe(2);
-      expect(embed.fields.find(f => f.name === "Debt")).toBeUndefined();
+      expect(embed.fields[0].value).toBe("25 / 20 ✅");
     });
 
-    test("omits the debt field when debt is omitted", () => {
+    test("omits the debt suffix when debt is omitted", () => {
       const embed = buildDayResultEmbed("bob", "April 8, 2026", 25, 20, true, 3);
       expect(embed.fields.length).toBe(2);
+      expect(embed.fields[0].value).toBe("25 / 20 ✅");
     });
   });
 });

@@ -1,6 +1,6 @@
 export function formatDayResult(username: string, date: string, total: number, target: number, met: boolean, streak: number, debt: number = 0): string {
   const icon = met ? "✅" : "❌";
-  const debtPart = debt > 0 ? ` | debt: ${debt}` : "";
+  const debtPart = debt > 0 ? ` (${debt} debt)` : "";
   const fire = streak >= 1 ? "🔥 " : "";
   return `📊 ${username} — ${date}\n${total}/${target} ${icon}${debtPart} | ${fire}streak: ${streak}`;
 }

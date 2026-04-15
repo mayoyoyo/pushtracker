@@ -18,9 +18,9 @@ describe("slack", () => {
       expect(msg).toBe("📊 bob — April 8, 2026\n20/20 ✅ | 🔥 streak: 1");
     });
 
-    test("formats with debt shown", () => {
+    test("formats with debt shown inline after the icon", () => {
       const msg = formatDayResult("alice", "April 8, 2026", 15, 20, false, 0, 40);
-      expect(msg).toBe("📊 alice — April 8, 2026\n15/20 ❌ | debt: 40 | streak: 0");
+      expect(msg).toBe("📊 alice — April 8, 2026\n15/20 ❌ (40 debt) | streak: 0");
     });
 
     test("hides debt when zero", () => {
