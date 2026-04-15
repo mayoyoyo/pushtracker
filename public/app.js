@@ -83,14 +83,16 @@ function renderAuth(app) {
         <img src="/opm-fist.png" class="logo-fist" alt="">
         <div class="logo">PushTracker</div>
         <div class="subtitle">No excuses.</div>
-        <form class="auth-form" id="auth-form">
+        <form class="auth-form" id="auth-form" novalidate>
           <div class="input-group">
             <label>Username</label>
-            <input type="text" id="auth-username" autocomplete="username" autocapitalize="none" maxlength="15" pattern="[A-Za-z0-9]+" title="Alphanumeric only, up to 15 characters" required>
+            <input type="text" id="auth-username" autocomplete="username" autocapitalize="none" maxlength="15" required>
+            <div class="field-error" id="err-username"></div>
           </div>
           <div class="input-group" ${mode === 'login' ? 'style="display:none"' : ''}>
             <label>Invite Code</label>
-            <input type="text" id="auth-invite" autocapitalize="characters" placeholder="Enter invite code" maxlength="4" pattern="[A-Za-z0-9]{4}" title="4 alphanumeric characters" style="text-transform:uppercase">
+            <input type="text" id="auth-invite" autocapitalize="characters" placeholder="Enter invite code" maxlength="4" style="text-transform:uppercase">
+            <div class="field-error" id="err-invite"></div>
           </div>
           <div class="input-group">
             <label>4-Digit Passcode</label>
@@ -100,8 +102,8 @@ function renderAuth(app) {
               <input type="number" inputmode="numeric" maxlength="1" class="pin" data-idx="2">
               <input type="number" inputmode="numeric" maxlength="1" class="pin" data-idx="3">
             </div>
+            <div class="field-error" id="err-passcode"></div>
           </div>
-          <div class="error-msg" id="auth-error"></div>
           <button type="submit" class="btn btn-primary">${mode === 'login' ? 'Log In' : 'Sign Up'}</button>
         </form>
         <div class="auth-toggle">
@@ -116,12 +118,55 @@ function renderAuth(app) {
     pins.forEach((pin, i) => {
       pin.addEventListener('input', () => {
         pin.value = pin.value.slice(-1);
+        clearFieldError('err-passcode');
         if (pin.value && i < 3) pins[i + 1].focus();
       });
       pin.addEventListener('keydown', (e) => {
         if (e.key === 'Backspace' && !pin.value && i > 0) pins[i - 1].focus();
       });
     });
+
+    // Live-filter non-alphanumeric characters from username and invite
+    // inputs so typing `_`, space, or punctuation never reaches the
+    // value at all. Paste is covered too — the 'input' event fires
+    // after paste and we re-assign value.
+    const usernameInput = app.querySelector('#auth-username');
+    usernameInput.addEventListener('input', () => {
+      const filtered = usernameInput.value.replace(/[^A-Za-z0-9]/g, '');
+      if (filtered !== usernameInput.value) usernameInput.value = filtered;
+      clearFieldError('err-username');
+    });
+
+    const inviteInput = app.querySelector('#auth-invite');
+    if (inviteInput) {
+      inviteInput.addEventListener('input', () => {
+        const filtered = inviteInput.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+        if (filtered !== inviteInput.value) inviteInput.value = filtered;
+        clearFieldError('err-invite');
+      });
+    }
+
+    function clearFieldError(id) {
+      const el = app.querySelector('#' + id);
+      if (el) el.textContent = '';
+    }
+    function setFieldError(id, message) {
+      const el = app.querySelector('#' + id);
+      if (el) el.textContent = message;
+    }
+    function clearAllFieldErrors() {
+      ['err-username', 'err-invite', 'err-passcode'].forEach(clearFieldError);
+    }
+    // Best-effort route from a server error message to the field it
+    // probably refers to. Priority: passcode > invite > username so
+    // "Invalid username or passcode" lands under the passcode row
+    // (the more commonly mistyped of the two).
+    function routeServerError(message) {
+      if (/passcode/i.test(message)) return 'err-passcode';
+      if (/invite/i.test(message)) return 'err-invite';
+      if (/username/i.test(message)) return 'err-username';
+      return 'err-passcode';
+    }
 
     app.querySelector('#toggle-auth').addEventListener('click', () => {
       mode = mode === 'login' ? 'signup' : 'login';
@@ -130,20 +175,42 @@ function renderAuth(app) {
 
     app.querySelector('#auth-form').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const username = app.querySelector('#auth-username').value.trim();
+      clearAllFieldErrors();
+
+      const username = usernameInput.value.trim();
       const passcode = Array.from(pins).map(p => p.value).join('');
-      const errEl = app.querySelector('#auth-error');
+      let ok = true;
+
+      if (!username) {
+        setFieldError('err-username', 'Required');
+        ok = false;
+      } else if (!/^[A-Za-z0-9]{1,15}$/.test(username)) {
+        setFieldError('err-username', '1–15 letters or numbers');
+        ok = false;
+      }
+
+      if (mode === 'signup') {
+        const inviteCode = inviteInput.value.trim();
+        if (!inviteCode) {
+          setFieldError('err-invite', 'Required');
+          ok = false;
+        } else if (!/^[A-Za-z0-9]{4}$/.test(inviteCode)) {
+          setFieldError('err-invite', '4 letters or numbers');
+          ok = false;
+        }
+      }
 
       if (passcode.length !== 4) {
-        errEl.textContent = 'Enter a 4-digit passcode';
-        return;
+        setFieldError('err-passcode', 'Enter a 4-digit passcode');
+        ok = false;
       }
+
+      if (!ok) return;
 
       try {
         const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
         if (mode === 'signup') {
-          const inviteCode = app.querySelector('#auth-invite').value.trim();
-          if (!inviteCode) { errEl.textContent = 'Enter an invite code'; return; }
+          const inviteCode = inviteInput.value.trim();
           const data = await api('POST', '/api/auth/signup', { username, passcode, timezone: tz, inviteCode });
           currentUser = data.user;
         } else {
@@ -153,7 +220,7 @@ function renderAuth(app) {
         await checkTimezone();
         await loadDashboard();
       } catch (err) {
-        errEl.textContent = err.message;
+        setFieldError(routeServerError(err.message), err.message);
       }
     });
   }
