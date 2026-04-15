@@ -86,11 +86,11 @@ function renderAuth(app) {
         <form class="auth-form" id="auth-form">
           <div class="input-group">
             <label>Username</label>
-            <input type="text" id="auth-username" autocomplete="username" autocapitalize="none" required>
+            <input type="text" id="auth-username" autocomplete="username" autocapitalize="none" maxlength="15" pattern="[A-Za-z0-9]+" title="Alphanumeric only, up to 15 characters" required>
           </div>
           <div class="input-group" ${mode === 'login' ? 'style="display:none"' : ''}>
             <label>Invite Code</label>
-            <input type="text" id="auth-invite" autocapitalize="characters" placeholder="Enter invite code" style="text-transform:uppercase">
+            <input type="text" id="auth-invite" autocapitalize="characters" placeholder="Enter invite code" maxlength="4" pattern="[A-Za-z0-9]{4}" title="4 alphanumeric characters" style="text-transform:uppercase">
           </div>
           <div class="input-group">
             <label>4-Digit Passcode</label>

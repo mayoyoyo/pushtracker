@@ -25,6 +25,30 @@ describe("auth", () => {
       expect(signup("hanson", "abcd", "America/New_York", "DEV0")).rejects.toThrow();
       expect(signup("hanson", "12345", "America/New_York", "DEV0")).rejects.toThrow();
     });
+
+    test("rejects empty username", async () => {
+      expect(signup("", "1234", "America/New_York", "DEV0")).rejects.toThrow("1–15 alphanumeric");
+    });
+
+    test("rejects username longer than 15 characters", async () => {
+      expect(signup("a".repeat(16), "1234", "America/New_York", "DEV0")).rejects.toThrow("1–15 alphanumeric");
+    });
+
+    test("rejects username with non-alphanumeric characters", async () => {
+      expect(signup("han_son", "1234", "America/New_York", "DEV0")).rejects.toThrow("1–15 alphanumeric");
+      expect(signup("han son", "1234", "America/New_York", "DEV0")).rejects.toThrow("1–15 alphanumeric");
+      expect(signup("han-son", "1234", "America/New_York", "DEV0")).rejects.toThrow("1–15 alphanumeric");
+    });
+
+    test("accepts a 15-character alphanumeric username", async () => {
+      const result = await signup("a".repeat(15), "1234", "America/New_York", "DEV0");
+      expect(result.user.username).toBe("a".repeat(15));
+    });
+
+    test("rejects invite code with special characters", async () => {
+      expect(signup("hanson", "1234", "America/New_York", "DE!0")).rejects.toThrow("4 alphanumeric");
+      expect(signup("hanson", "1234", "America/New_York", "DE 0")).rejects.toThrow("4 alphanumeric");
+    });
   });
 
   describe("login", () => {
