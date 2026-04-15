@@ -7,232 +7,23 @@ async function loadPose() {
   return poseModule;
 }
 
-// iOS PWA audio plumbing. On-device diagnostics showed that after the
-// first session, even freshly-created AudioContexts refuse to resume
-// ("Failed to start the audio device"), regardless of lifecycle hooks
-// or in-gesture rebuilds. iOS is denying WebAudio output entirely.
-//
-// The workaround: play a real audible <audio> element inside the user
-// gesture first, to force iOS to actually activate the audio hardware.
-// Once that unlock has happened, WebAudio can resume and subsequent
-// tones work normally.
-let audioCtx = null;
-let silentSource = null;
-let unlockAudioEl = null;   // <audio> element with an audible WAV, played in first gesture
-let audioHwUnlocked = false; // True once <audio>.play() resolved successfully
-let audioDebug = { unlocked: 0, primed: 0, resumed: 0, teardowns: 0, rebuilds: 0, hwUnlocks: 0, lastEvt: '', lastErr: '' };
-window.audioDebug = audioDebug;
-
-// Build a short audible beep as a WAV data URI. 50ms, 440Hz sine, quiet
-// (amplitude ~0.05 so it's barely noticeable but is real PCM that iOS
-// actually has to route through the audio hardware).
-function makeBeepDataUri() {
-  const sampleRate = 44100;
-  const durSec = 0.05;
-  const freq = 440;
-  const amp = 0.05;
-  const samples = Math.floor(durSec * sampleRate);
-  const buffer = new ArrayBuffer(44 + samples * 2);
-  const view = new DataView(buffer);
-  const writeStr = (off, s) => { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); };
-  writeStr(0, 'RIFF');
-  view.setUint32(4, 36 + samples * 2, true);
-  writeStr(8, 'WAVE');
-  writeStr(12, 'fmt ');
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);       // PCM
-  view.setUint16(22, 1, true);       // mono
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * 2, true);
-  view.setUint16(32, 2, true);
-  view.setUint16(34, 16, true);
-  writeStr(36, 'data');
-  view.setUint32(40, samples * 2, true);
-  for (let i = 0; i < samples; i++) {
-    // 3ms linear fade in/out so there's no click at the edges
-    const t = i / sampleRate;
-    const fade = Math.min(1, Math.min(t / 0.003, (durSec - t) / 0.003));
-    const val = Math.sin(2 * Math.PI * freq * t) * amp * fade;
-    view.setInt16(44 + i * 2, Math.round(val * 32767), true);
-  }
-  const bytes = new Uint8Array(buffer);
-  let bin = '';
-  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-  return 'data:audio/wav;base64,' + btoa(bin);
-}
-
-function getUnlockAudioEl() {
-  if (unlockAudioEl) return unlockAudioEl;
-  const el = document.createElement('audio');
-  el.setAttribute('x-webkit-airplay', 'deny');
-  el.preload = 'auto';
-  el.src = makeBeepDataUri();
-  el.volume = 1;
-  unlockAudioEl = el;
-  return el;
-}
-
-function getAudioContext() {
-  if (!audioCtx) {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if ('audioSession' in navigator) {
-      try { navigator.audioSession.type = 'playback'; } catch {}
-    }
-  }
-  return audioCtx;
-}
-window.getAudioContext = getAudioContext;
-
-function primeAudioOutput() {
-  try {
-    const ctx = getAudioContext();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    gain.gain.value = 0.001;
-    osc.frequency.value = 440;
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 0.01);
-    audioDebug.primed++;
-  } catch (e) { audioDebug.lastErr = 'prime:' + (e?.message || e); }
-}
-window.primeAudioOutput = primeAudioOutput;
-
-// WebAudio-native keepalive. A ConstantSourceNode outputs a constant
-// signal (we set it to 0 = silent) through the destination, which keeps
-// the audio device active without ever producing audible sound.
-// Replaces the previous <audio> element approach, which was failing on
-// iOS PWA in user testing (silent:none in the debug readout).
-function ensureSilentSource() {
-  if (silentSource) return;
-  try {
-    const ctx = getAudioContext();
-    const src = ctx.createConstantSource();
-    src.offset.value = 0;
-    src.connect(ctx.destination);
-    src.start();
-    silentSource = src;
-  } catch (e) { audioDebug.lastErr = 'silent:' + (e?.message || e); }
-}
-
-function teardownAudio(tag) {
-  audioDebug.teardowns++;
-  audioDebug.lastEvt = tag || 'teardown';
-  if (audioCtx) {
-    try { audioCtx.close(); } catch {}
-    audioCtx = null;
-  }
-  silentSource = null;
-}
-
-// Synchronously close + recreate the ctx inside a user gesture. This is
-// the ONLY recovery path that actually works on iOS PWA freeze/thaw,
-// since none of the lifecycle events fire reliably for us to tear down
-// in advance.
-function rebuildCtxInGesture() {
-  audioDebug.rebuilds++;
-  if (audioCtx) {
-    try { audioCtx.close(); } catch {}
-  }
-  audioCtx = null;
-  silentSource = null;
-  return getAudioContext();
-}
-
-function unlockAudio() {
-  audioDebug.unlocked++;
-
-  // Set audioSession.type inside the gesture — some iOS versions only
-  // honor it when called during a user activation, not at page load.
-  if ('audioSession' in navigator) {
-    try { navigator.audioSession.type = 'playback'; } catch {}
-  }
-
-  // Step 1: play a real audible <audio> element to force iOS to start
-  // the audio hardware. WebAudio alone can't accomplish this on reopen
-  // after the first session.
-  if (!audioHwUnlocked) {
-    const el = getUnlockAudioEl();
-    try {
-      el.currentTime = 0;
-      const p = el.play();
-      if (p && p.then) {
-        p.then(() => { audioHwUnlocked = true; audioDebug.hwUnlocks++; }, (e) => { audioDebug.lastErr = 'hwUnlock:' + (e?.message || e); });
-      } else {
-        audioHwUnlocked = true;
-        audioDebug.hwUnlocks++;
-      }
-    } catch (e) { audioDebug.lastErr = 'hwUnlock:' + (e?.message || e); }
-  }
-
-  // Step 2: rebuild dead ctx if needed, then try WebAudio resume.
-  let ctx = audioCtx;
-  if (ctx && ctx.state !== 'running') {
-    ctx = rebuildCtxInGesture();
-  } else if (!ctx) {
-    ctx = getAudioContext();
-  }
-
-  if (ctx.state === 'running') {
-    primeAudioOutput();
-    ensureSilentSource();
-    return;
-  }
-
-  ctx.resume().then(
-    () => {
-      audioDebug.resumed++;
-      primeAudioOutput();
-      ensureSilentSource();
-    },
-    (e) => { audioDebug.lastErr = 'resume:' + (e?.message || e); }
-  );
-}
-document.addEventListener('touchend', unlockAudio, true);
-document.addEventListener('click', unlockAudio, true);
-document.addEventListener('keydown', unlockAudio, true);
-
-// Cast a wide net for teardown opportunities. iOS has been observed to
-// skip pagehide on PWA exit, so we also listen for pageshow (with the
-// persisted flag for bfcache-like restores) and the Page Lifecycle API
-// freeze event. Whatever fires first wins; unlockAudio's in-gesture
-// rebuild is the final safety net.
-window.addEventListener('pagehide', () => teardownAudio('pagehide'));
-window.addEventListener('pageshow', (e) => {
-  audioDebug.lastEvt = 'pageshow:' + (e.persisted ? 'persisted' : 'fresh');
-  if (e.persisted) teardownAudio('pageshow-persisted');
-});
-document.addEventListener('freeze', () => teardownAudio('freeze'));
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') {
-    teardownAudio('visibilitychange-hidden');
-  } else if (document.visibilityState === 'visible' && audioCtx) {
-    audioCtx.resume().then(() => { primeAudioOutput(); ensureSilentSource(); }).catch(() => {});
-  }
-});
-
+// Sounds work in desktop Safari / Chrome but not in iOS PWA after a
+// cold reopen. The previous WebAudio unlock plumbing (PRs #29, #30,
+// #34-#38) did not fix it — see docs/superpowers/research/2026-04-15-
+// ios-pwa-audio.md for the full investigation. Reverted to the simple
+// per-tone fresh-ctx approach for now; shelved for later.
 function playCongratsSound() {
-  try {
-    const ctx = getAudioContext();
-    if (ctx.state !== 'running') ctx.resume().catch(() => {});
-    function tone(freq, dur, delay) {
-      setTimeout(() => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.frequency.value = freq;
-        gain.gain.value = 0.3;
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start();
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
-        osc.stop(ctx.currentTime + dur);
-      }, delay);
-    }
-    tone(523, 0.15, 0);
-    tone(659, 0.15, 180);
-    tone(784, 0.2, 360);
-  } catch {}
+  function tone(freq, dur, delay) {
+    setTimeout(() => {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator(); const gain = ctx.createGain();
+      osc.frequency.value = freq; gain.gain.value = 0.3;
+      osc.connect(gain); gain.connect(ctx.destination); osc.start();
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+      osc.stop(ctx.currentTime + dur);
+    }, delay);
+  }
+  tone(523, 0.15, 0); tone(659, 0.15, 180); tone(784, 0.2, 360);
 }
 
 async function api(method, path, body) {
@@ -1104,29 +895,9 @@ function showTutorial(onStart) {
         ${getModeContent(cameraMode)}
 
         <button class="btn ${btnClass}" style="width:100%;margin-top:24px" id="tut-start">Start Recording</button>
-        <div id="audio-debug" style="margin-top:12px;padding:8px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;font-family:monospace;font-size:10px;color:var(--text-dim);text-align:center"></div>
       </div>
     </div>
   `;
-
-  // Populate audio debug readout so we can see iOS PWA audio state on-device.
-  // Remove once the silence-after-reopen issue is confirmed fixed.
-  (function renderAudioDebug() {
-    const el = document.getElementById('audio-debug');
-    if (!el) return;
-    const ctx = window.getAudioContext ? window.getAudioContext() : null;
-    const d = window.audioDebug || {};
-    const hasAudioSession = 'audioSession' in navigator ? 'y' : 'n';
-    const sessType = (() => { try { return navigator.audioSession?.type || '-'; } catch { return '?'; } })();
-    const silent = silentSource ? 'on' : 'off';
-    const standalone = window.matchMedia('(display-mode: standalone)').matches ? 'pwa' : 'browser';
-    el.textContent =
-      `ctx:${ctx?.state || 'none'}  session:${hasAudioSession}/${sessType}  ` +
-      `silent:${silent}  mode:${standalone}\n` +
-      `unlock:${d.unlocked||0}  hw:${d.hwUnlocks||0}  resume:${d.resumed||0}  ` +
-      `prime:${d.primed||0}  rebuild:${d.rebuilds||0}  teardown:${d.teardowns||0}\n` +
-      `evt:${d.lastEvt || '-'}  err:${d.lastErr || '-'}`;
-  })();
 
   initIcons();
   document.getElementById('mode-std').addEventListener('click', () => { cameraMode = 'standard'; showTutorial(onStart); });
