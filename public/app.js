@@ -7,19 +7,70 @@ async function loadPose() {
   return poseModule;
 }
 
-// iOS PWA audio plumbing. iOS freezes PWAs on exit without firing any
-// lifecycle events we can intercept (confirmed via on-device debug —
-// pagehide did NOT fire, teardown stayed at 0). So the JS audioCtx
-// reference can outlive the native audio device, and resume() on that
-// corpse fails with "Failed to start the audio device" forever.
+// iOS PWA audio plumbing. On-device diagnostics showed that after the
+// first session, even freshly-created AudioContexts refuse to resume
+// ("Failed to start the audio device"), regardless of lifecycle hooks
+// or in-gesture rebuilds. iOS is denying WebAudio output entirely.
 //
-// Approach: don't rely on exit-time cleanup. Instead, detect the dead
-// ctx inside unlockAudio and rebuild it synchronously within the user
-// gesture. Every tap = a chance to recover.
+// The workaround: play a real audible <audio> element inside the user
+// gesture first, to force iOS to actually activate the audio hardware.
+// Once that unlock has happened, WebAudio can resume and subsequent
+// tones work normally.
 let audioCtx = null;
 let silentSource = null;
-let audioDebug = { unlocked: 0, primed: 0, resumed: 0, teardowns: 0, rebuilds: 0, lastEvt: '', lastErr: '' };
+let unlockAudioEl = null;   // <audio> element with an audible WAV, played in first gesture
+let audioHwUnlocked = false; // True once <audio>.play() resolved successfully
+let audioDebug = { unlocked: 0, primed: 0, resumed: 0, teardowns: 0, rebuilds: 0, hwUnlocks: 0, lastEvt: '', lastErr: '' };
 window.audioDebug = audioDebug;
+
+// Build a short audible beep as a WAV data URI. 50ms, 440Hz sine, quiet
+// (amplitude ~0.05 so it's barely noticeable but is real PCM that iOS
+// actually has to route through the audio hardware).
+function makeBeepDataUri() {
+  const sampleRate = 44100;
+  const durSec = 0.05;
+  const freq = 440;
+  const amp = 0.05;
+  const samples = Math.floor(durSec * sampleRate);
+  const buffer = new ArrayBuffer(44 + samples * 2);
+  const view = new DataView(buffer);
+  const writeStr = (off, s) => { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); };
+  writeStr(0, 'RIFF');
+  view.setUint32(4, 36 + samples * 2, true);
+  writeStr(8, 'WAVE');
+  writeStr(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);       // PCM
+  view.setUint16(22, 1, true);       // mono
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeStr(36, 'data');
+  view.setUint32(40, samples * 2, true);
+  for (let i = 0; i < samples; i++) {
+    // 3ms linear fade in/out so there's no click at the edges
+    const t = i / sampleRate;
+    const fade = Math.min(1, Math.min(t / 0.003, (durSec - t) / 0.003));
+    const val = Math.sin(2 * Math.PI * freq * t) * amp * fade;
+    view.setInt16(44 + i * 2, Math.round(val * 32767), true);
+  }
+  const bytes = new Uint8Array(buffer);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return 'data:audio/wav;base64,' + btoa(bin);
+}
+
+function getUnlockAudioEl() {
+  if (unlockAudioEl) return unlockAudioEl;
+  const el = document.createElement('audio');
+  el.setAttribute('x-webkit-airplay', 'deny');
+  el.preload = 'auto';
+  el.src = makeBeepDataUri();
+  el.volume = 1;
+  unlockAudioEl = el;
+  return el;
+}
 
 function getAudioContext() {
   if (!audioCtx) {
@@ -98,9 +149,24 @@ function unlockAudio() {
     try { navigator.audioSession.type = 'playback'; } catch {}
   }
 
-  // If we have a ctx that's NOT running, assume it might be dead from
-  // freeze/thaw and rebuild synchronously inside this gesture. The new
-  // ctx's resume() below is then called fresh, within user activation.
+  // Step 1: play a real audible <audio> element to force iOS to start
+  // the audio hardware. WebAudio alone can't accomplish this on reopen
+  // after the first session.
+  if (!audioHwUnlocked) {
+    const el = getUnlockAudioEl();
+    try {
+      el.currentTime = 0;
+      const p = el.play();
+      if (p && p.then) {
+        p.then(() => { audioHwUnlocked = true; audioDebug.hwUnlocks++; }, (e) => { audioDebug.lastErr = 'hwUnlock:' + (e?.message || e); });
+      } else {
+        audioHwUnlocked = true;
+        audioDebug.hwUnlocks++;
+      }
+    } catch (e) { audioDebug.lastErr = 'hwUnlock:' + (e?.message || e); }
+  }
+
+  // Step 2: rebuild dead ctx if needed, then try WebAudio resume.
   let ctx = audioCtx;
   if (ctx && ctx.state !== 'running') {
     ctx = rebuildCtxInGesture();
@@ -1057,8 +1123,8 @@ function showTutorial(onStart) {
     el.textContent =
       `ctx:${ctx?.state || 'none'}  session:${hasAudioSession}/${sessType}  ` +
       `silent:${silent}  mode:${standalone}\n` +
-      `unlock:${d.unlocked||0}  resume:${d.resumed||0}  prime:${d.primed||0}  ` +
-      `rebuild:${d.rebuilds||0}  teardown:${d.teardowns||0}\n` +
+      `unlock:${d.unlocked||0}  hw:${d.hwUnlocks||0}  resume:${d.resumed||0}  ` +
+      `prime:${d.primed||0}  rebuild:${d.rebuilds||0}  teardown:${d.teardowns||0}\n` +
       `evt:${d.lastEvt || '-'}  err:${d.lastErr || '-'}`;
   })();
 
