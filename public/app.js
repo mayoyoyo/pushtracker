@@ -493,6 +493,14 @@ function renderDashboard(app, data) {
           const mSurplus = Math.max(0, m.today_total - m.daily_target);
           const mRemainingDebt = Math.max(0, m.debt - Math.min(mSurplus, m.debt));
 
+          // Streak/ice slot: if the member's previous completed day was a
+          // miss (🧊), that takes precedence over the hot-streak label and
+          // shows as a bare ice emoji (no count). Otherwise falls back to
+          // the existing streakText which renders "🔥 Nd streak" when hot
+          // and empty when cold.
+          const leftText = m.prev_day_icon === 'I' ? '🧊' : streakText(m.streak);
+          const hasLeftText = leftText.length > 0;
+
           // Expanded: last5 icon row + today breakdown bar + legend. Only
           // shown for members who have ever logged — non-starters have
           // nothing to show and no reason to be clickable.
@@ -539,7 +547,7 @@ function renderDashboard(app, data) {
               <div class="team-member-header">
                 <div>
                   <div class="member-name">${m.username}</div>
-                  <div class="member-target">${!m.ever_logged ? '<span style="font-size:11px;color:var(--text-dim)">not started</span>' : `${streakText(m.streak)}${mRemainingDebt > 0 ? `<span style="font-size:11px;color:var(--danger);margin-left:${m.streak.count > 0 ? '4' : '0'}px">(${mRemainingDebt} debt)</span>` : ''}`}</div>
+                  <div class="member-target">${!m.ever_logged ? '<span style="font-size:11px;color:var(--text-dim)">not started</span>' : `${leftText}${mRemainingDebt > 0 ? `<span style="font-size:11px;color:var(--danger);margin-left:${hasLeftText ? '4' : '0'}px">(${mRemainingDebt} debt)</span>` : ''}`}</div>
                 </div>
                 <div class="team-member-right">
                   <div class="member-progress ${statusClass}">${display}</div>
