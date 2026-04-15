@@ -7,7 +7,11 @@ const MIN_VISIBILITY = 0.5;
 const SMOOTHING_WINDOW = 9;
 
 function playTone(freq, duration, type = 'sine') {
-  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  // Use the shared ctx from app.js so we inherit the iOS PWA unlock +
+  // navigator.audioSession.type = "playback" routing. Without this, every
+  // tone created a fresh ctx that got silenced by the iOS silent switch.
+  const ctx = window.getAudioContext ? window.getAudioContext() : new (window.AudioContext || window.webkitAudioContext)();
+  if (ctx.state !== 'running') ctx.resume().catch(() => {});
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
   osc.type = type;

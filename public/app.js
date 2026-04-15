@@ -28,6 +28,9 @@ function getAudioContext() {
   }
   return audioCtx;
 }
+// Exposed so pose.js (loaded via dynamic import) shares this context and
+// inherits the iOS PWA unlock + audioSession routing.
+window.getAudioContext = getAudioContext;
 
 function startSilentLoop() {
   if (silentAudioLoop) return;
