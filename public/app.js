@@ -82,7 +82,7 @@ function renderAuth(app) {
       <div class="auth-screen">
         <img src="/opm-fist.png" class="logo-fist" alt="">
         <div class="logo">PushTracker</div>
-        <div class="subtitle">Hold each other accountable</div>
+        <div class="subtitle">No excuses.</div>
         <form class="auth-form" id="auth-form">
           <div class="input-group">
             <label>Username</label>
