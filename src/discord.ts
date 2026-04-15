@@ -25,14 +25,12 @@ export function buildDayResultEmbed(
   const icon = met ? "✅" : "❌";
   const streakWord = streak === 1 ? "day" : "days";
   const streakValue = streak >= 1 ? `🔥 ${streak} ${streakWord}` : `0 days`;
+  const debtSuffix = debt > 0 ? ` (${debt} debt)` : "";
 
   const fields: DiscordEmbedField[] = [
-    { name: "Pushups", value: `${total} / ${target} ${icon}`, inline: true },
+    { name: "Pushups", value: `${icon} ${total} / ${target}${debtSuffix}`, inline: true },
     { name: "Streak", value: streakValue, inline: true },
   ];
-  if (debt > 0) {
-    fields.push({ name: "Debt", value: `${debt}`, inline: true });
-  }
 
   return {
     title: `📊 ${username} — ${date}`,
