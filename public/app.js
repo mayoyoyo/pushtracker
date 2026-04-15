@@ -508,8 +508,6 @@ function renderDashboard(app, data) {
       };
     })() : null;
 
-    const showBack = showBreakdown && hasAnyReps;
-
     const frontBody = `
       <div class="progress-count" style="${completedStyles ? completedStyles.count : ''}">${data.today_total} <span class="progress-target">/ ${data.daily_target}</span></div>
       ${segmentedBar}
@@ -529,6 +527,47 @@ function renderDashboard(app, data) {
       ${segmentedBar}
     `;
 
+    // Inner HTML of #progress-card-el. Extracted so the flip toggle can swap
+    // just this content instead of re-rendering the whole Me tab (which
+    // would also re-fetch the calendar from /api/me/calendar).
+    function progressCardInner(showBack) {
+      return `
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div class="progress-label">${showBack ? 'BREAKDOWN' : (done ? `<span style="${completedStyles ? completedStyles.label : ''}">✓ COMPLETE</span>` : 'Today')}<span class="progress-time-left" id="time-left"></span></div>
+          ${hasAnyReps ? `<button class="flip-btn" id="flip-btn" aria-label="${showBack ? 'Hide breakdown' : 'Show breakdown'}"><i data-lucide="${showBack ? 'arrow-left' : 'pie-chart'}" style="width:14px;height:14px"></i></button>` : ''}
+        </div>
+        ${showBack ? backBody : frontBody}
+        ${data.debt > 0 ? `<div style="margin-top:8px;font-size:12px;color:${debtFullyPaid ? '#22c55e' : 'var(--danger)'}">${debtFullyPaid ? '✓' : ''} ${debtCovered}/${data.debt} debt covered</div>` : ''}
+        ${done && (data.has_slack || data.has_discord) ? `<div style="margin-top:${data.debt > 0 ? '4' : '8'}px;font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:5px"><i data-lucide="hash" style="width:12px;height:12px;opacity:0.5"></i> Results posted to ${data.has_slack && data.has_discord ? 'Slack and Discord' : data.has_slack ? 'Slack' : 'Discord'} at 7am</div>` : ''}
+      `;
+    }
+
+    // Re-queries #time-left each tick so it survives the card-inner swap.
+    function updateTimeLeft() {
+      if (!data.next_day_boundary) return;
+      const timeEl = document.getElementById('time-left');
+      if (!timeEl) return;
+      const ms = new Date(data.next_day_boundary).getTime() - Date.now();
+      if (ms <= 0) { timeEl.textContent = '(resetting...)'; return; }
+      const totalMin = Math.floor(ms / 60000);
+      const h = Math.floor(totalMin / 60);
+      const m = totalMin % 60;
+      timeEl.textContent = h > 0 ? `(${h}h ${m}m left)` : `(${m}m left)`;
+    }
+
+    function bindFlipBtn() {
+      const flipBtn = document.getElementById('flip-btn');
+      if (!flipBtn) return;
+      flipBtn.addEventListener('click', () => {
+        showBreakdown = !showBreakdown;
+        const cardEl = document.getElementById('progress-card-el');
+        cardEl.innerHTML = progressCardInner(showBreakdown && hasAnyReps);
+        bindFlipBtn();
+        initIcons();
+        updateTimeLeft();
+      });
+    }
+
     app.innerHTML = `
       ${tabHeader()}
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
@@ -542,13 +581,7 @@ function renderDashboard(app, data) {
         </div>
       </div>
       <div class="progress-card" id="progress-card-el" style="${completedStyles ? completedStyles.card : ''}">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <div class="progress-label">${showBack ? 'BREAKDOWN' : (done ? `<span style="${completedStyles ? completedStyles.label : ''}">✓ COMPLETE</span>` : 'Today')}<span class="progress-time-left" id="time-left"></span></div>
-          ${hasAnyReps ? `<button class="flip-btn" id="flip-btn" aria-label="${showBack ? 'Hide breakdown' : 'Show breakdown'}"><i data-lucide="${showBack ? 'arrow-left' : 'pie-chart'}" style="width:14px;height:14px"></i></button>` : ''}
-        </div>
-        ${showBack ? backBody : frontBody}
-        ${data.debt > 0 ? `<div style="margin-top:8px;font-size:12px;color:${debtFullyPaid ? '#22c55e' : 'var(--danger)'}">${debtFullyPaid ? '✓' : ''} ${debtCovered}/${data.debt} debt covered</div>` : ''}
-        ${done && (data.has_slack || data.has_discord) ? `<div style="margin-top:${data.debt > 0 ? '4' : '8'}px;font-size:11px;color:var(--text-muted);display:flex;align-items:center;gap:5px"><i data-lucide="hash" style="width:12px;height:12px;opacity:0.5"></i> Results posted to ${data.has_slack && data.has_discord ? 'Slack and Discord' : data.has_slack ? 'Slack' : 'Discord'} at 7am</div>` : ''}
+        ${progressCardInner(showBreakdown && hasAnyReps)}
       </div>
       ${remainingDebt > 0 ? `
       <div class="debt-card">
@@ -569,30 +602,12 @@ function renderDashboard(app, data) {
     bindTabs();
     app.querySelector('#btn-camera').addEventListener('click', () => showScreen('camera'));
     app.querySelector('#btn-manual').addEventListener('click', () => showManualEntry());
-    const flipBtn = app.querySelector('#flip-btn');
-    if (flipBtn) {
-      flipBtn.addEventListener('click', () => {
-        showBreakdown = !showBreakdown;
-        renderMeTab();
-      });
-    }
+    bindFlipBtn();
     initIcons();
     renderCalendar(document.getElementById('calendar-container'), data);
 
-    // Time remaining
-    if (data.next_day_boundary) {
-      const timeEl = document.getElementById('time-left');
-      function updateTimeLeft() {
-        const ms = new Date(data.next_day_boundary).getTime() - Date.now();
-        if (ms <= 0) { timeEl.textContent = '(resetting...)'; return; }
-        const totalMin = Math.floor(ms / 60000);
-        const h = Math.floor(totalMin / 60);
-        const m = totalMin % 60;
-        timeEl.textContent = h > 0 ? `(${h}h ${m}m left)` : `(${m}m left)`;
-      }
-      updateTimeLeft();
-      setInterval(updateTimeLeft, 60000);
-    }
+    updateTimeLeft();
+    if (data.next_day_boundary) setInterval(updateTimeLeft, 60000);
   }
 
   async function renderTeamTab() {
