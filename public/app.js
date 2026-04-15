@@ -600,7 +600,7 @@ function renderDashboard(app, data) {
                   </div>
                   ${hasTodayReps ? `
                     <div class="expanded-legend">
-                      ${byMode.opm      > 0 ? `<div class="legend-item"><span class="breakdown-dot seg-dot-opm"></span>One Punch <strong>${byMode.opm}</strong></div>` : ''}
+                      ${byMode.opm      > 0 ? `<div class="legend-item"><span class="breakdown-dot seg-dot-opm"></span>OP <strong>${byMode.opm}</strong></div>` : ''}
                       ${byMode.situp    > 0 ? `<div class="legend-item"><span class="breakdown-dot seg-dot-situp"></span>Sit-up <strong>${byMode.situp}</strong></div>` : ''}
                       ${byMode.standard > 0 ? `<div class="legend-item"><span class="breakdown-dot seg-dot-std"></span>Standard <strong>${byMode.standard}</strong></div>` : ''}
                     </div>
@@ -964,14 +964,14 @@ async function renderCamera(app) {
             <div style="font-size:24px;font-weight:700;text-shadow:0 2px 8px rgba(0,0,0,0.8)">Daily complete!</div>
             <div style="font-size:14px;color:rgba(255,255,255,0.7);margin-top:4px">Keep going for extra credit</div>
           </div>
-          <div style="position:absolute;bottom:70px;left:0;right:0;padding:20px;text-align:center;background:linear-gradient(transparent, rgba(0,0,0,0.7))">
+          <div style="position:absolute;bottom:70px;left:0;right:0;padding:20px;text-align:center;background:linear-gradient(transparent, #000)">
             <div id="cam-count" style="font-size:72px;font-weight:900;letter-spacing:-3px;line-height:1;color:#fff;text-shadow:0 2px 12px rgba(0,0,0,0.5)">0</div>
             <div style="font-size:14px;color:rgba(255,255,255,0.7);margin-top:2px">Reps</div>
             <div id="cam-timer" style="font-size:20px;font-weight:600;color:rgba(255,255,255,0.9);margin-top:4px;font-variant-numeric:tabular-nums">00:00</div>
           </div>
-          <div id="cam-bottom-bar" style="position:absolute;bottom:0;left:0;right:0;padding:12px 16px;padding-bottom:max(12px, env(safe-area-inset-bottom));display:flex;gap:8px">
-            <button class="btn ${stopBtnClass}" id="cam-stop" style="flex:1;padding:14px">Stop & Save</button>
-            <button class="prod-btn" id="cam-flip" title="Flip camera"><i data-lucide="refresh-cw" style="width:16px;height:16px"></i></button>
+          <div id="cam-bottom-bar" style="position:absolute;bottom:0;left:0;right:0;padding:12px 16px;padding-bottom:max(12px, env(safe-area-inset-bottom));background:#000;display:flex;align-items:center;justify-content:center;gap:12px">
+            <button class="btn ${stopBtnClass}" id="cam-stop" style="flex:0 1 260px;padding:14px">Stop & Save</button>
+            <button class="prod-btn" id="cam-flip" title="Flip camera" style="width:60px;height:40px;border-radius:20px"><i data-lucide="switch-camera" style="width:18px;height:18px"></i></button>
           </div>
         </div>
       </div>
