@@ -87,6 +87,13 @@ body {
 .auth-toggle a { color: var(--text); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 
 .error-msg { color: var(--danger); font-size: 13px; text-align: center; min-height: 20px; }
+.field-error {
+  color: var(--danger);
+  font-size: 12px;
+  min-height: 14px;
+  margin-top: 4px;
+  line-height: 1.2;
+}
 
 /* Dashboard */
 .dashboard-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
