@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { pickDayIcon, dayIconToMode } from "../src/day-icon";
+import { pickDayIcon, dayIconToMode, computeStreakDisplay } from "../src/day-icon";
 
 // Helper: build a logs array from (mode, count) pairs.
 function logs(...pairs: [string, number][]): { mode: string; count: number }[] {
@@ -107,5 +107,100 @@ describe("dayIconToMode", () => {
   });
   test("maps I to manual", () => {
     expect(dayIconToMode("I")).toBe("manual");
+  });
+});
+
+// Exhaustive matrix for the streak/ice slot displayed on team cards and
+// the dashboard header. Each case is framed as the user state the API
+// sees at request time: the stored streak (updated by cron at day end),
+// the last5 history, the running today total, and the daily target.
+// Existence of this suite is the guarantee that the chris bug (PR #20:
+// ice showing for a user with a 1-day hot streak after a prior miss)
+// cannot silently regress.
+describe("computeStreakDisplay", () => {
+  // --- fresh / no-history cases ---
+
+  test("fresh user, target not yet met → none", () => {
+    expect(computeStreakDisplay({ stored_streak: 0, last5: "", today_total: 5, daily_target: 20 }))
+      .toEqual({ count: 0, type: "none" });
+  });
+
+  test("fresh user, target met on day 1 → 1-day hot streak", () => {
+    expect(computeStreakDisplay({ stored_streak: 0, last5: "", today_total: 20, daily_target: 20 }))
+      .toEqual({ count: 1, type: "hot" });
+  });
+
+  test("fresh user, target is zero (never-met sentinel) → none", () => {
+    // daily_target=0 is the "not yet set" sentinel; pickDayIcon already
+    // treats it as missed. computeStreakDisplay must match.
+    expect(computeStreakDisplay({ stored_streak: 0, last5: "", today_total: 100, daily_target: 0 }))
+      .toEqual({ count: 0, type: "none" });
+  });
+
+  // --- active streak, no previous miss ---
+
+  test("active streak, met again today → count incremented, hot", () => {
+    expect(computeStreakDisplay({ stored_streak: 3, last5: "F,F,F", today_total: 25, daily_target: 20 }))
+      .toEqual({ count: 4, type: "hot" });
+  });
+
+  test("active streak, not yet met today → count unchanged, still hot", () => {
+    // Mid-day: user has a 3-day streak but hasn't yet hit today. The UI
+    // should still show the existing streak (the streak doesn't reset
+    // until cron runs at day end).
+    expect(computeStreakDisplay({ stored_streak: 3, last5: "F,F,F", today_total: 10, daily_target: 20 }))
+      .toEqual({ count: 3, type: "hot" });
+  });
+
+  // --- chris's exact bug (the regression guard) ---
+
+  test("previous day ice, met today → 1-day hot streak (CHRIS BUG)", () => {
+    // Chris's state on prod: last5 ended in 'I' (Apr 13 missed), stored
+    // streak was 0, today he hit 61/50. Old code showed 🧊 because it
+    // checked prev_day_icon first. New logic: met-today wins, so hot.
+    expect(computeStreakDisplay({ stored_streak: 0, last5: "F,F,I", today_total: 61, daily_target: 50 }))
+      .toEqual({ count: 1, type: "hot" });
+  });
+
+  test("previous day ice, not met today → ice", () => {
+    // Same state as the chris case but without hitting target yet —
+    // this is where the ice signal is meant to show.
+    expect(computeStreakDisplay({ stored_streak: 0, last5: "F,F,I", today_total: 10, daily_target: 50 }))
+      .toEqual({ count: 0, type: "ice" });
+  });
+
+  // --- multiple misses ---
+
+  test("multiple consecutive ice days, not met today → ice", () => {
+    expect(computeStreakDisplay({ stored_streak: 0, last5: "F,I,I,I", today_total: 5, daily_target: 50 }))
+      .toEqual({ count: 0, type: "ice" });
+  });
+
+  test("multiple consecutive ice days, met today → 1-day hot streak", () => {
+    expect(computeStreakDisplay({ stored_streak: 0, last5: "F,I,I,I", today_total: 50, daily_target: 50 }))
+      .toEqual({ count: 1, type: "hot" });
+  });
+
+  // --- edge: last5 rightmost is not ice but streak is somehow 0 ---
+
+  test("last5 ends in F with stored streak 0 (shouldn't happen, but falls through to none)", () => {
+    // In practice cron would have bumped the streak if the latest day
+    // was met — this is a safety-net case for defensive rendering.
+    expect(computeStreakDisplay({ stored_streak: 0, last5: "I,I,F", today_total: 10, daily_target: 50 }))
+      .toEqual({ count: 0, type: "none" });
+  });
+
+  // --- edge: exact boundary, today_total === daily_target ---
+
+  test("today_total exactly equals daily_target → met → hot 1d", () => {
+    expect(computeStreakDisplay({ stored_streak: 0, last5: "I", today_total: 50, daily_target: 50 }))
+      .toEqual({ count: 1, type: "hot" });
+  });
+
+  // --- long-term streak, previous day ice is impossible (streak would be 0) ---
+
+  test("stored_streak > 0 and last5 ends with met icon → hot with stored count", () => {
+    expect(computeStreakDisplay({ stored_streak: 7, last5: "F,F,F,S,F", today_total: 0, daily_target: 50 }))
+      .toEqual({ count: 7, type: "hot" });
   });
 });

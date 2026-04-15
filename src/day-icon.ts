@@ -43,3 +43,38 @@ export function dayIconToMode(icon: DayIcon): 'opm' | 'situp' | 'standard' | 'ma
     case 'I': return 'manual';
   }
 }
+
+// Live "streak slot" display state for a member: what to render in the
+// small space to the left of the debt label.
+//
+// Rules:
+//   - If today met OR the stored streak is non-zero → 'hot' with a count.
+//     The "met today" case covers fresh restarts after a miss (the chris
+//     bug from PR #20): a 1-day streak beats the ice signal.
+//   - Else if the previous boundary-advanced day was 'I' (ice) → 'ice'.
+//     This surfaces a broken streak when the user is currently cold.
+//   - Else → 'none'.
+//
+// Lives here (shared module) instead of in api.ts or the client so both
+// /api/me and /api/team/today agree and it can be unit-tested in isolation.
+export type StreakDisplay = { count: number; type: 'hot' | 'ice' | 'none' };
+
+export function computeStreakDisplay(params: {
+  stored_streak: number;
+  last5: string;
+  today_total: number;
+  daily_target: number;
+}): StreakDisplay {
+  const todayMet = params.daily_target > 0 && params.today_total >= params.daily_target;
+  let count = params.stored_streak;
+  if (todayMet && count > 0) count++;
+  else if (todayMet) count = 1;
+
+  if (count > 0) return { count, type: 'hot' };
+
+  const pastIcons = params.last5 ? params.last5.split(',') : [];
+  const prevDayIcon = pastIcons.length > 0 ? pastIcons[pastIcons.length - 1] : null;
+  if (prevDayIcon === 'I') return { count: 0, type: 'ice' };
+
+  return { count: 0, type: 'none' };
+}

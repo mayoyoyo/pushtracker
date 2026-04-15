@@ -56,8 +56,10 @@ function streakIcons(last5days) {
 }
 
 function streakText(streak) {
-  if (!streak || streak.count === 0 || streak.type !== 'hot') return '';
-  return `🔥 ${streak.count}d streak`;
+  if (!streak) return '';
+  if (streak.type === 'hot' && streak.count > 0) return `🔥 ${streak.count}d streak`;
+  if (streak.type === 'ice') return '🧊';
+  return '';
 }
 
 function showScreen(name, data) {
@@ -493,14 +495,10 @@ function renderDashboard(app, data) {
           const mSurplus = Math.max(0, m.today_total - m.daily_target);
           const mRemainingDebt = Math.max(0, m.debt - Math.min(mSurplus, m.debt));
 
-          // Streak/ice slot: an active streak (hot) always wins — even a
-          // one-day fresh-start streak after a miss, since "met today" is
-          // the positive signal users care about. Ice only shows as a
-          // fallback when the previous completed day was a miss AND the
-          // member is NOT currently on a hot streak (i.e., today not yet
-          // met and yesterday was missed). Otherwise nothing.
-          const streakLine = streakText(m.streak);
-          const leftText = streakLine || (m.prev_day_icon === 'I' ? '🧊' : '');
+          // Streak/ice slot — all decision logic lives on the backend now
+          // (src/day-icon.ts#computeStreakDisplay). streak.type is one of
+          // 'hot' | 'ice' | 'none'; streakText renders each case.
+          const leftText = streakText(m.streak);
           const hasLeftText = leftText.length > 0;
 
           // Expanded: last5 icon row + today breakdown bar + legend. Only
