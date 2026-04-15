@@ -57,7 +57,7 @@ function streakIcons(last5days) {
 
 function streakText(streak) {
   if (!streak || streak.count === 0 || streak.type !== 'hot') return '';
-  return `${streak.count} day streak 🔥`;
+  return `🔥 ${streak.count}d streak`;
 }
 
 function showScreen(name, data) {
@@ -496,7 +496,7 @@ function renderDashboard(app, data) {
             <div class="team-member">
               <div>
                 <div class="member-name">${m.username} <span style="font-size:14px;letter-spacing:1px">${streakIcons(m.last5days)}</span></div>
-                <div class="member-target">${!m.ever_logged ? '<span style="font-size:11px;color:var(--text-dim)">not started</span>' : `${streakText(m.streak)}${mRemainingDebt > 0 ? `<span style="font-size:11px;color:var(--danger);margin-left:${m.streak.count > 0 ? '4' : '0'}px">debt: ${mRemainingDebt}</span>` : ''}`}</div>
+                <div class="member-target">${!m.ever_logged ? '<span style="font-size:11px;color:var(--text-dim)">not started</span>' : `${streakText(m.streak)}${mRemainingDebt > 0 ? `<span style="font-size:11px;color:var(--danger);margin-left:${m.streak.count > 0 ? '4' : '0'}px">(${mRemainingDebt} debt)</span>` : ''}`}</div>
               </div>
               <div class="member-progress ${statusClass}">${display}</div>
             </div>`;
