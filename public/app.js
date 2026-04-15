@@ -27,8 +27,9 @@ if ('audioSession' in navigator) {
 }
 
 let audioCtx = null;
-let audioUnlocked = false;
 let silentAudioLoop = null;
+let audioDebug = { unlocked: 0, primed: 0, resumed: 0, lastErr: '' };
+window.audioDebug = audioDebug;
 
 function getAudioContext() {
   if (!audioCtx) {
@@ -42,9 +43,6 @@ function getAudioContext() {
 window.getAudioContext = getAudioContext;
 
 function primeAudioOutput() {
-  // Push a near-silent buffer through the destination to commit iOS
-  // audioSession routing. Called inside unlock gestures and on
-  // visibilitychange, since the routing can drop on backgrounding.
   try {
     const ctx = getAudioContext();
     const osc = ctx.createOscillator();
@@ -55,34 +53,48 @@ function primeAudioOutput() {
     gain.connect(ctx.destination);
     osc.start(ctx.currentTime);
     osc.stop(ctx.currentTime + 0.01);
-  } catch {}
+    audioDebug.primed++;
+  } catch (e) { audioDebug.lastErr = 'prime:' + (e?.message || e); }
 }
 window.primeAudioOutput = primeAudioOutput;
 
 function startSilentLoop() {
-  if (silentAudioLoop) return;
+  if (silentAudioLoop) {
+    silentAudioLoop.play().catch(() => {});
+    return;
+  }
   const audio = document.createElement('audio');
   audio.setAttribute('x-webkit-airplay', 'deny');
   audio.preload = 'auto';
   audio.loop = true;
   audio.src = 'data:audio/wav;base64,UklGRjIAAABXQVZFZm10IBIAAAABAAEAQB8AAEAfAAABAAgAAABmYWN0BAAAAAEAAABkYXRhAQAAAIA=';
-  audio.play().then(() => { silentAudioLoop = audio; }).catch(() => {});
+  audio.play().then(() => { silentAudioLoop = audio; }).catch((e) => { audioDebug.lastErr = 'silentLoop:' + (e?.message || e); });
 }
 
+// Idempotent — safe to call on every gesture. Listeners are NOT self-
+// removed, so pose.js tracker tones are re-primed any time the user
+// interacts after returning from background/freeze/thaw.
 function unlockAudio() {
-  if (audioUnlocked) return;
-  audioUnlocked = true;
+  audioDebug.unlocked++;
   startSilentLoop();
   const ctx = getAudioContext();
-  ctx.resume().catch(() => {});
+  if (ctx.state !== 'running') {
+    ctx.resume().then(() => { audioDebug.resumed++; }).catch((e) => { audioDebug.lastErr = 'resume:' + (e?.message || e); });
+  }
   primeAudioOutput();
-  document.removeEventListener('touchend', unlockAudio, true);
-  document.removeEventListener('click', unlockAudio, true);
-  document.removeEventListener('keydown', unlockAudio, true);
 }
 document.addEventListener('touchend', unlockAudio, true);
 document.addEventListener('click', unlockAudio, true);
 document.addEventListener('keydown', unlockAudio, true);
+
+// pageshow fires on initial load AND on iOS PWA bfcache / freeze→thaw
+// restores, where visibilitychange alone can miss the transition.
+window.addEventListener('pageshow', () => {
+  if (audioCtx) {
+    audioCtx.resume().then(() => primeAudioOutput()).catch(() => {});
+  }
+  if (silentAudioLoop) silentAudioLoop.play().catch(() => {});
+});
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && audioCtx) {
@@ -983,9 +995,27 @@ function showTutorial(onStart) {
         ${getModeContent(cameraMode)}
 
         <button class="btn ${btnClass}" style="width:100%;margin-top:24px" id="tut-start">Start Recording</button>
+        <div id="audio-debug" style="margin-top:12px;padding:8px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;font-family:monospace;font-size:10px;color:var(--text-dim);text-align:center"></div>
       </div>
     </div>
   `;
+
+  // Populate audio debug readout so we can see iOS PWA audio state on-device.
+  // Remove once the silence-after-reopen issue is confirmed fixed.
+  (function renderAudioDebug() {
+    const el = document.getElementById('audio-debug');
+    if (!el) return;
+    const ctx = window.getAudioContext ? window.getAudioContext() : null;
+    const d = window.audioDebug || {};
+    const hasAudioSession = 'audioSession' in navigator ? 'y' : 'n';
+    const sessType = (() => { try { return navigator.audioSession?.type || '-'; } catch { return '?'; } })();
+    const silent = silentAudioLoop ? (silentAudioLoop.paused ? 'paused' : 'playing') : 'none';
+    const standalone = window.matchMedia('(display-mode: standalone)').matches ? 'pwa' : 'browser';
+    el.textContent =
+      `ctx:${ctx?.state || 'none'}  session:${hasAudioSession}/${sessType}  ` +
+      `silent:${silent}  mode:${standalone}\n` +
+      `unlock:${d.unlocked||0}  resume:${d.resumed||0}  prime:${d.primed||0}  err:${d.lastErr || '-'}`;
+  })();
 
   initIcons();
   document.getElementById('mode-std').addEventListener('click', () => { cameraMode = 'standard'; showTutorial(onStart); });
