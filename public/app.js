@@ -289,8 +289,7 @@ function renderDashboard(app, data) {
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
         <div style="flex:1"></div>
         <div style="text-align:center">
-          <div style="font-size:18px;font-weight:700">${data.group_name || 'Push-up Challenge'}</div>
-          ${data.group_name ? '<div style="font-size:12px;color:var(--text-dim)">Push-up Challenge</div>' : ''}
+          <div style="font-size:18px;font-weight:700">${data.group_name || ''}</div>
         </div>
         <div style="flex:1;display:flex;justify-content:flex-end">
           <button class="settings-btn" id="settings-btn"><i data-lucide="settings" style="width:18px;height:18px"></i></button>
@@ -494,12 +493,14 @@ function renderDashboard(app, data) {
           const mSurplus = Math.max(0, m.today_total - m.daily_target);
           const mRemainingDebt = Math.max(0, m.debt - Math.min(mSurplus, m.debt));
 
-          // Streak/ice slot: if the member's previous completed day was a
-          // miss (🧊), that takes precedence over the hot-streak label and
-          // shows as a bare ice emoji (no count). Otherwise falls back to
-          // the existing streakText which renders "🔥 Nd streak" when hot
-          // and empty when cold.
-          const leftText = m.prev_day_icon === 'I' ? '🧊' : streakText(m.streak);
+          // Streak/ice slot: an active streak (hot) always wins — even a
+          // one-day fresh-start streak after a miss, since "met today" is
+          // the positive signal users care about. Ice only shows as a
+          // fallback when the previous completed day was a miss AND the
+          // member is NOT currently on a hot streak (i.e., today not yet
+          // met and yesterday was missed). Otherwise nothing.
+          const streakLine = streakText(m.streak);
+          const leftText = streakLine || (m.prev_day_icon === 'I' ? '🧊' : '');
           const hasLeftText = leftText.length > 0;
 
           // Expanded: last5 icon row + today breakdown bar + legend. Only
@@ -676,7 +677,7 @@ function showSettings() {
       <button class="btn btn-primary" style="width:100%;margin-top:16px;margin-bottom:10px" id="set-save">Save</button>
       ${currentUser.paired_username ? `
         <div style="display:flex;gap:8px">
-          <button class="btn btn-primary" style="flex:1" id="set-switch">Switch to ${currentUser.paired_username}</button>
+          <button class="btn btn-one-punch" style="flex:1" id="set-switch">Switch to ${currentUser.paired_username}</button>
           <button class="btn btn-danger" style="flex:1" id="set-logout">Log Out</button>
         </div>
       ` : `
