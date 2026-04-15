@@ -3,6 +3,35 @@ import { Database } from "bun:sqlite";
 
 let db: Database;
 
+/**
+ * Schema + migration policy for getDb().
+ *
+ * This function runs on every server start. The block below is intentionally
+ * restricted to operations that are SAFE to re-run every single boot:
+ *
+ *   - CREATE TABLE IF NOT EXISTS                 (idempotent by construction)
+ *   - CREATE INDEX IF NOT EXISTS                 (idempotent by construction)
+ *   - try { ALTER TABLE ... ADD COLUMN } catch {} (SQLite throws on duplicate
+ *                                                  column; caught and ignored)
+ *   - INSERT OR IGNORE ...                       (seeds, safe by construction)
+ *   - UPDATE ... WHERE col = <sentinel>          (backfill of a newly-added
+ *                                                  default; naturally no-op on
+ *                                                  rerun because the WHERE
+ *                                                  stops matching after first
+ *                                                  pass)
+ *
+ * ANY OTHER UPDATE / DELETE / DATA-MUTATING INSERT MUST go through
+ * runMigration(name, fn) below. Don't care how "obviously idempotent"
+ * your rewrite seems — wrap it. PR #10 silently corrupted user mode data
+ * for a week because a bare UPDATE in this block was claimed to be
+ * idempotent in a comment and wasn't; see PR #17 postmortem.
+ *
+ * runMigration uses the _migrations marker table as a one-shot gate. Once
+ * the marker row is inserted (by the PRIMARY KEY), the destructive block
+ * is unreachable on subsequent boots. Tests in tests/db.test.ts enforce
+ * this for both runMigration itself and the specific mode_rename_v1
+ * migration.
+ */
 export function getDb(path: string = "pushtracker.db"): Database {
   db = new Database(path);
   db.exec("PRAGMA journal_mode = WAL");
@@ -34,6 +63,10 @@ export function getDb(path: string = "pushtracker.db"): Database {
       code TEXT PRIMARY KEY,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+    CREATE TABLE IF NOT EXISTS _migrations (
+      name TEXT PRIMARY KEY,
+      applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
   // Add invite_code column if missing (migration for existing DBs)
   try { db.exec("ALTER TABLE users ADD COLUMN invite_code TEXT NOT NULL DEFAULT 'DEV0'"); } catch {}
@@ -41,11 +74,6 @@ export function getDb(path: string = "pushtracker.db"): Database {
   try { db.exec("ALTER TABLE invite_codes ADD COLUMN group_name TEXT NOT NULL DEFAULT ''"); } catch {}
   // Add mode to pushup_logs
   try { db.exec("ALTER TABLE pushup_logs ADD COLUMN mode TEXT NOT NULL DEFAULT 'manual'"); } catch {}
-  // Mode rename: 'standard' (old hardcore mode) → 'opm', 'noob' (old gentle mode) → 'standard'.
-  // 'situp' and 'manual' are untouched. Order matters: migrate standard→opm first so
-  // the second step has no collision. Idempotent — safe to run on every startup.
-  db.exec("UPDATE pushup_logs SET mode = 'opm' WHERE mode = 'standard'");
-  db.exec("UPDATE pushup_logs SET mode = 'standard' WHERE mode = 'noob'");
   // Streak columns on users: last5 = comma-separated day results (S/F/I), streak = hot streak count
   try { db.exec("ALTER TABLE users ADD COLUMN last5 TEXT NOT NULL DEFAULT ''"); } catch {}
   try { db.exec("ALTER TABLE users ADD COLUMN streak INTEGER NOT NULL DEFAULT 0"); } catch {}
@@ -70,8 +98,24 @@ export function getDb(path: string = "pushtracker.db"): Database {
     total INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (user_id, day_date)
   )`);
-  db.exec("UPDATE day_results SET mode = 'opm' WHERE mode = 'standard'");
-  db.exec("UPDATE day_results SET mode = 'standard' WHERE mode = 'noob'");
+  // Mode rename (one-shot, marker-gated via runMigration). See postmortem for
+  // PR #17 for why this used to be a bare UPDATE and why it's never allowed
+  // to be one again.
+  runMigration('mode_rename_v1', () => {
+    // Early exit for DBs that already went through the rename via the old
+    // (buggy) bare-UPDATE path that predates the marker. Their surviving
+    // 'noob' rows are zero, which is exactly the signal that the destructive
+    // rewrite already happened and running it again would re-corrupt.
+    const hasLegacyNoob = db.prepare(
+      "SELECT 1 FROM pushup_logs WHERE mode = 'noob' " +
+      "UNION ALL SELECT 1 FROM day_results WHERE mode = 'noob' LIMIT 1"
+    ).get();
+    if (!hasLegacyNoob) return;
+    db.exec("UPDATE pushup_logs SET mode = 'opm'      WHERE mode = 'standard'");
+    db.exec("UPDATE pushup_logs SET mode = 'standard' WHERE mode = 'noob'");
+    db.exec("UPDATE day_results SET mode = 'opm'      WHERE mode = 'standard'");
+    db.exec("UPDATE day_results SET mode = 'standard' WHERE mode = 'noob'");
+  });
   // Seed invite codes
   db.prepare("INSERT OR IGNORE INTO invite_codes (code, group_name) VALUES ('DEV0', 'MayoLab')").run();
   db.prepare("INSERT OR IGNORE INTO invite_codes (code, group_name) VALUES ('FRST', 'Frist')").run();
@@ -81,6 +125,29 @@ export function getDb(path: string = "pushtracker.db"): Database {
   db.prepare("UPDATE users SET invite_code = 'DEV0' WHERE invite_code = 'DEV'").run();
   linkMayoToHansonIfNeeded();
   return db;
+}
+
+/**
+ * One-shot migration gate. If `name` is recorded in _migrations, return
+ * immediately. Otherwise run `fn()` inside a transaction and insert the
+ * marker row. If `fn` throws, the transaction rolls back and the marker
+ * is NOT recorded, so the migration will be retried on the next boot.
+ *
+ * The marker is inserted even if `fn` is a no-op (e.g., an early-exit
+ * when the migration detects it has nothing to do). That's intentional:
+ * we want a definitive "this migration has been seen" record so the
+ * destructive branch never re-enters on subsequent boots.
+ *
+ * Use this for any UPDATE / DELETE / data-mutating INSERT that isn't
+ * trivially safe to re-run. See the policy comment on getDb().
+ */
+export function runMigration(name: string, fn: () => void): void {
+  const existing = db.prepare("SELECT 1 FROM _migrations WHERE name = ?").get(name);
+  if (existing) return;
+  db.transaction(() => {
+    fn();
+    db.prepare("INSERT INTO _migrations (name) VALUES (?)").run(name);
+  })();
 }
 
 export interface User {

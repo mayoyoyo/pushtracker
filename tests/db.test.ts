@@ -1,5 +1,10 @@
 import { describe, test, expect, beforeEach } from "bun:test";
-import { getDb, createUser, getUserByUsername, getUserById, logPushups, getTodayLogs, getTodayTotal, getMonthResults, hasEverLoggedPushups, getTeamByGroup, updateTarget, updateDebt, getGroupName, getSlackConfig, getDiscordConfig, getLifetimeTotals, resolveDataUserId, linkAlias, saveDayResult, updateStreak, updateTimezone, getResolvedUserById, getResolvedTeamByGroup, getUsersWithExpiredBoundary, linkMayoToHansonIfNeeded } from "../src/db";
+import { getDb, createUser, getUserByUsername, getUserById, logPushups, getTodayLogs, getTodayTotal, getMonthResults, hasEverLoggedPushups, getTeamByGroup, updateTarget, updateDebt, getGroupName, getSlackConfig, getDiscordConfig, getLifetimeTotals, resolveDataUserId, linkAlias, saveDayResult, updateStreak, updateTimezone, getResolvedUserById, getResolvedTeamByGroup, getUsersWithExpiredBoundary, linkMayoToHansonIfNeeded, runMigration } from "../src/db";
+import { Database } from "bun:sqlite";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { randomBytes } from "node:crypto";
+import { unlinkSync, existsSync } from "node:fs";
 
 describe("database", () => {
   beforeEach(() => {
@@ -487,4 +492,116 @@ describe("database", () => {
       expect(getUserByUsername("hanson")!.source_user_id).toBeNull();
     });
   });
+
+  // Guards against the class of bug from PR #10: a bare destructive UPDATE
+  // in getDb() that runs on every boot and re-corrupts data each time.
+  describe("migration framework", () => {
+    describe("runMigration", () => {
+      test("runs fn exactly once across multiple invocations", () => {
+        let count = 0;
+        runMigration("test_count_once", () => { count++; });
+        runMigration("test_count_once", () => { count++; });
+        runMigration("test_count_once", () => { count++; });
+        expect(count).toBe(1);
+      });
+
+      test("records the marker even if fn is a no-op early-exit", () => {
+        let called = false;
+        runMigration("test_noop", () => { /* early exit */ });
+        runMigration("test_noop", () => { called = true; });
+        expect(called).toBe(false);
+      });
+
+      test("does NOT record the marker if fn throws (retryable)", () => {
+        let attempts = 0;
+        try {
+          runMigration("test_fail_first", () => {
+            attempts++;
+            throw new Error("boom");
+          });
+        } catch {}
+        // Second call should try again because the marker was never set
+        runMigration("test_fail_first", () => { attempts++; });
+        expect(attempts).toBe(2);
+      });
+    });
+
+    describe("mode_rename_v1 specifically", () => {
+      // Uses a temp file so getDb() can be called twice against the same
+      // on-disk DB and we can observe state across re-initializations — the
+      // exact scenario the PR #10 bug reproduced on every deploy.
+      let dbPath: string;
+      beforeEach(() => {
+        dbPath = join(tmpdir(), `pt-mig-${randomBytes(8).toString("hex")}.db`);
+      });
+
+      test("calling getDb() twice against a seeded DB leaves mode counts unchanged", () => {
+        // First init creates schema and records the migration marker for this
+        // fresh DB (no 'noob' rows to migrate, but the marker is still set).
+        getDb(dbPath);
+        createUser("alice", "h", "UTC", "2026-04-15T00:00:00Z", "DEV0");
+        // Write mode values that post-PR#10 code produces. The buggy boot-
+        // time UPDATE would flatten 'standard' → 'opm' on the second getDb().
+        logPushups(1, 10, "camera", "opm");
+        logPushups(1, 20, "camera", "standard");
+        logPushups(1,  5, "camera", "situp");
+        logPushups(1,  3, "manual", "manual");
+
+        const before = modeCounts(dbPath);
+        // Second init: the bug would re-run the UPDATE block here. With the
+        // marker-gated migration, nothing should happen.
+        getDb(dbPath);
+        const after = modeCounts(dbPath);
+
+        expect(after).toEqual(before);
+        expect(after).toEqual({ opm: 10, standard: 20, situp: 5, manual: 3 });
+        if (existsSync(dbPath)) unlinkSync(dbPath);
+      });
+
+      test("pre-rename DB with 'noob' rows migrates correctly on first boot", () => {
+        // Simulate a DB that was last touched by pre-PR#10 code by using a
+        // raw Database handle to insert 'noob'/'standard' rows before our
+        // init runs. getDb() should pick them up and rewrite on first call.
+        {
+          const raw = new Database(dbPath);
+          raw.exec(`
+            CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, passcode TEXT NOT NULL, daily_target INTEGER NOT NULL DEFAULT 20, debt INTEGER NOT NULL DEFAULT 0, timezone TEXT NOT NULL, next_day_boundary TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')));
+            CREATE TABLE pushup_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL REFERENCES users(id), count INTEGER NOT NULL, source TEXT NOT NULL CHECK(source IN ('camera','manual')), mode TEXT NOT NULL DEFAULT 'manual', logged_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')));
+          `);
+          raw.prepare("INSERT INTO users (username, passcode, timezone, next_day_boundary) VALUES ('chris', 'h', 'UTC', '2026-04-15T00:00:00Z')").run();
+          raw.prepare("INSERT INTO pushup_logs (user_id, count, source, mode) VALUES (1, 15, 'camera', 'noob'), (1, 10, 'camera', 'noob'), (1, 20, 'camera', 'standard')").run();
+          raw.close();
+        }
+
+        // First boot: should convert noob→standard, standard→opm, and set marker.
+        getDb(dbPath);
+        const afterFirst = modeCounts(dbPath);
+        expect(afterFirst).toEqual({ opm: 20, standard: 25, situp: 0, manual: 0 });
+
+        // Second boot: nothing should change, regardless of new 'standard'
+        // rows that get created between boots (the exact failure mode from
+        // PR #10 in prod).
+        logPushups(1, 7, "camera", "standard");
+        getDb(dbPath);
+        const afterSecond = modeCounts(dbPath);
+        expect(afterSecond).toEqual({ opm: 20, standard: 32, situp: 0, manual: 0 });
+
+        if (existsSync(dbPath)) unlinkSync(dbPath);
+      });
+    });
+  });
 });
+
+// Helper: read mode distribution directly from a DB file without going
+// through the module-level `db` singleton (which the outer beforeEach may
+// have reassigned to an unrelated :memory: instance).
+function modeCounts(path: string): Record<string, number> {
+  const raw = new Database(path);
+  const rows = raw.prepare(
+    "SELECT mode, COALESCE(SUM(count), 0) AS total FROM pushup_logs GROUP BY mode"
+  ).all() as Array<{ mode: string; total: number }>;
+  raw.close();
+  const out: Record<string, number> = { opm: 0, standard: 0, situp: 0, manual: 0 };
+  for (const r of rows) out[r.mode] = r.total;
+  return out;
+}
