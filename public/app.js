@@ -944,8 +944,9 @@ async function renderCamera(app) {
     ` : `
       <div class="camera-screen">
         <div class="camera-feed">
-          <video id="cam-video" playsinline autoplay muted style="border:3px solid #fc8181;border-radius:8px"></video>
+          <video id="cam-video" playsinline autoplay muted></video>
           <canvas id="cam-canvas"></canvas>
+          <div id="cam-gate-border" style="position:absolute;top:0;left:0;right:0;bottom:var(--cam-bar-height);border:6px solid #fc8181;border-radius:8px;pointer-events:none;transition:border-color 0.15s"></div>
           <div style="position:absolute;top:16px;right:16px;display:flex;gap:8px;align-items:center">
             <div style="background:rgba(0,0,0,0.5);backdrop-filter:blur(8px);border-radius:20px;padding:6px 12px;font-size:12px;font-weight:600;color:#fff;display:flex;align-items:center;gap:6px">
               ${mode === 'opm' ? '<img src="/opm-fist.png" style="width:14px;height:14px">' : mode === 'situp' ? '<span style="font-size:12px">🙆</span>' : '<span style="font-size:12px">👊</span>'}
@@ -969,9 +970,10 @@ async function renderCamera(app) {
             <div style="font-size:14px;color:rgba(255,255,255,0.7);margin-top:2px">Reps</div>
             <div id="cam-timer" style="font-size:20px;font-weight:600;color:rgba(255,255,255,0.9);margin-top:4px;font-variant-numeric:tabular-nums">00:00</div>
           </div>
-          <div id="cam-bottom-bar" style="position:absolute;bottom:0;left:0;right:0;padding:12px 16px;padding-bottom:max(12px, env(safe-area-inset-bottom));background:#000;display:flex;align-items:center;justify-content:center;gap:12px">
-            <button class="btn ${stopBtnClass}" id="cam-stop" style="flex:0 1 260px;padding:14px">Stop & Save</button>
-            <button class="prod-btn" id="cam-flip" title="Flip camera" style="width:60px;height:40px;border-radius:20px"><i data-lucide="switch-camera" style="width:18px;height:18px"></i></button>
+          <div id="cam-bottom-bar" style="position:absolute;bottom:0;left:0;right:0;padding:12px 16px;padding-bottom:var(--cam-pad-bottom);background:#000;display:flex;align-items:center;gap:8px">
+            <div style="flex:0 0 60px"></div>
+            <button class="btn ${stopBtnClass}" id="cam-stop" style="flex:1;max-width:260px;margin:0 auto;padding:14px">Stop & Save</button>
+            <button class="prod-btn" id="cam-flip" title="Flip camera" style="flex:0 0 60px;height:40px;border-radius:20px"><i data-lucide="switch-camera" style="width:18px;height:18px"></i></button>
           </div>
         </div>
       </div>
@@ -1051,7 +1053,10 @@ async function renderCamera(app) {
             }
           }
         }
-        video.style.borderColor = d.gated === 'active' ? '#48bb78' : '#fc8181';
+        const gateBorder = document.getElementById('cam-gate-border');
+        const gateColor = d.gated === 'active' ? '#48bb78' : '#fc8181';
+        if (gateBorder) gateBorder.style.borderColor = gateColor;
+        else video.style.borderColor = gateColor;
         // Depth bar
         const depthFill = document.getElementById('depth-fill');
         const depthBar = document.getElementById('depth-bar');
@@ -1139,3 +1144,75 @@ async function init() {
 }
 
 init();
+
+// Pull-to-refresh: only active on the dashboard at scroll top. Re-fetches
+// /api/me via loadDashboard() rather than a full page reload so we keep
+// bundled state (cameraMode, pose model, etc.) warm.
+(function () {
+  const THRESHOLD = 60;
+  const MAX_PULL = 80;
+  let pulling = false;
+  let startY = 0;
+  let pullDist = 0;
+  let refreshing = false;
+  let indicator = null;
+  let spinner = null;
+
+  function onStart(e) {
+    if (refreshing || currentScreen !== 'dashboard' || window.scrollY > 0) return;
+    indicator = document.getElementById('pull-refresh');
+    spinner = indicator?.querySelector('.pull-refresh-spinner');
+    if (!indicator || !spinner) return;
+    startY = (e.touches ? e.touches[0] : e).clientY;
+    pulling = true;
+    pullDist = 0;
+  }
+
+  function onMove(e) {
+    if (!pulling || !indicator) return;
+    const dy = (e.touches ? e.touches[0] : e).clientY - startY;
+    if (dy <= 0) {
+      pullDist = 0;
+      indicator.style.height = '0px';
+      return;
+    }
+    e.preventDefault();
+    pullDist = Math.min(dy, MAX_PULL);
+    indicator.style.height = pullDist + 'px';
+    spinner.style.transform = 'rotate(' + (pullDist * 4) + 'deg)';
+    indicator.classList.toggle('ready', pullDist >= THRESHOLD);
+  }
+
+  async function onEnd() {
+    if (!pulling || !indicator) return;
+    pulling = false;
+    const ind = indicator;
+    const spn = spinner;
+    indicator = null;
+    spinner = null;
+
+    if (pullDist < THRESHOLD) {
+      ind.classList.remove('ready');
+      ind.style.height = '0px';
+      spn.style.transform = '';
+      pullDist = 0;
+      return;
+    }
+
+    refreshing = true;
+    ind.classList.remove('ready');
+    ind.classList.add('refreshing');
+    ind.style.height = '40px';
+    spn.style.transform = '';
+    try { await loadDashboard(); } catch {}
+    ind.classList.remove('refreshing');
+    ind.style.height = '0px';
+    refreshing = false;
+    pullDist = 0;
+  }
+
+  document.addEventListener('touchstart', onStart, { passive: true });
+  document.addEventListener('touchmove', onMove, { passive: false });
+  document.addEventListener('touchend', onEnd, { passive: true });
+  document.addEventListener('touchcancel', onEnd, { passive: true });
+})();
