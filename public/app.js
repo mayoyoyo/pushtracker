@@ -27,8 +27,8 @@ if ('audioSession' in navigator) {
 }
 
 let audioCtx = null;
-let silentAudioLoop = null;
-let audioDebug = { unlocked: 0, primed: 0, resumed: 0, lastErr: '' };
+let silentSource = null;
+let audioDebug = { unlocked: 0, primed: 0, resumed: 0, teardowns: 0, lastErr: '' };
 window.audioDebug = audioDebug;
 
 function getAudioContext() {
@@ -58,48 +58,65 @@ function primeAudioOutput() {
 }
 window.primeAudioOutput = primeAudioOutput;
 
-function startSilentLoop() {
-  if (silentAudioLoop) {
-    silentAudioLoop.play().catch(() => {});
-    return;
+// WebAudio-native keepalive. A ConstantSourceNode outputs a constant
+// signal (we set it to 0 = silent) through the destination, which keeps
+// the audio device active without ever producing audible sound.
+// Replaces the previous <audio> element approach, which was failing on
+// iOS PWA in user testing (silent:none in the debug readout).
+function ensureSilentSource() {
+  if (silentSource) return;
+  try {
+    const ctx = getAudioContext();
+    const src = ctx.createConstantSource();
+    src.offset.value = 0;
+    src.connect(ctx.destination);
+    src.start();
+    silentSource = src;
+  } catch (e) { audioDebug.lastErr = 'silent:' + (e?.message || e); }
+}
+
+// Close the AudioContext entirely on pagehide / hidden so iOS can't
+// freeze it into a dead state that later fails to resume with
+// "Failed to start the audio device". On the next user interaction
+// we'll rebuild from scratch.
+function teardownAudio() {
+  audioDebug.teardowns++;
+  if (audioCtx) {
+    try { audioCtx.close(); } catch {}
+    audioCtx = null;
   }
-  const audio = document.createElement('audio');
-  audio.setAttribute('x-webkit-airplay', 'deny');
-  audio.preload = 'auto';
-  audio.loop = true;
-  audio.src = 'data:audio/wav;base64,UklGRjIAAABXQVZFZm10IBIAAAABAAEAQB8AAEAfAAABAAgAAABmYWN0BAAAAAEAAABkYXRhAQAAAIA=';
-  audio.play().then(() => { silentAudioLoop = audio; }).catch((e) => { audioDebug.lastErr = 'silentLoop:' + (e?.message || e); });
+  silentSource = null;
 }
 
 // Idempotent — safe to call on every gesture. Listeners are NOT self-
-// removed, so pose.js tracker tones are re-primed any time the user
-// interacts after returning from background/freeze/thaw.
+// removed, so any tap after background/thaw re-runs the full setup.
 function unlockAudio() {
   audioDebug.unlocked++;
-  startSilentLoop();
   const ctx = getAudioContext();
-  if (ctx.state !== 'running') {
-    ctx.resume().then(() => { audioDebug.resumed++; }).catch((e) => { audioDebug.lastErr = 'resume:' + (e?.message || e); });
+  if (ctx.state === 'running') {
+    primeAudioOutput();
+    ensureSilentSource();
+    return;
   }
-  primeAudioOutput();
+  ctx.resume().then(
+    () => {
+      audioDebug.resumed++;
+      primeAudioOutput();
+      ensureSilentSource();
+    },
+    (e) => { audioDebug.lastErr = 'resume:' + (e?.message || e); }
+  );
 }
 document.addEventListener('touchend', unlockAudio, true);
 document.addEventListener('click', unlockAudio, true);
 document.addEventListener('keydown', unlockAudio, true);
 
-// pageshow fires on initial load AND on iOS PWA bfcache / freeze→thaw
-// restores, where visibilitychange alone can miss the transition.
-window.addEventListener('pageshow', () => {
-  if (audioCtx) {
-    audioCtx.resume().then(() => primeAudioOutput()).catch(() => {});
-  }
-  if (silentAudioLoop) silentAudioLoop.play().catch(() => {});
-});
-
+window.addEventListener('pagehide', teardownAudio);
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && audioCtx) {
-    audioCtx.resume().then(() => primeAudioOutput()).catch(() => {});
-    if (silentAudioLoop) silentAudioLoop.play().catch(() => {});
+  if (document.visibilityState === 'hidden') {
+    teardownAudio();
+  } else if (document.visibilityState === 'visible' && audioCtx) {
+    audioCtx.resume().then(() => { primeAudioOutput(); ensureSilentSource(); }).catch(() => {});
   }
 });
 
@@ -1009,12 +1026,13 @@ function showTutorial(onStart) {
     const d = window.audioDebug || {};
     const hasAudioSession = 'audioSession' in navigator ? 'y' : 'n';
     const sessType = (() => { try { return navigator.audioSession?.type || '-'; } catch { return '?'; } })();
-    const silent = silentAudioLoop ? (silentAudioLoop.paused ? 'paused' : 'playing') : 'none';
+    const silent = silentSource ? 'on' : 'off';
     const standalone = window.matchMedia('(display-mode: standalone)').matches ? 'pwa' : 'browser';
     el.textContent =
       `ctx:${ctx?.state || 'none'}  session:${hasAudioSession}/${sessType}  ` +
       `silent:${silent}  mode:${standalone}\n` +
-      `unlock:${d.unlocked||0}  resume:${d.resumed||0}  prime:${d.primed||0}  err:${d.lastErr || '-'}`;
+      `unlock:${d.unlocked||0}  resume:${d.resumed||0}  prime:${d.primed||0}  ` +
+      `teardown:${d.teardowns||0}  err:${d.lastErr || '-'}`;
   })();
 
   initIcons();
