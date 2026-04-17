@@ -42,7 +42,10 @@ describe("cron", () => {
     logPushups(user.id, 1, "manual", "manual", "2026-03-01T14:00:00Z");
     processExpiredBoundaries("2026-04-08T12:00:00Z");
     const updated = getUserById(user.id)!;
-    expect(updated.debt).toBe(200); // 4 days * 50 = 200
+    // Four missed days at target=50 would be 200 raw, but debt is capped at
+    // 3*daily_target (150) so a week-long absence doesn't produce an
+    // insurmountable hill. See MAX_DEBT_MULTIPLIER in src/cron.ts.
+    expect(updated.debt).toBe(150);
     expect(updated.next_day_boundary).toBe("2026-04-09T11:00:00.000Z");
   });
 
@@ -83,6 +86,37 @@ describe("cron", () => {
     processExpiredBoundaries("2026-04-07T12:00:00Z");
     const updated = getUserById(user.id)!;
     expect(updated.debt).toBe(0); // 10 - min(30 surplus, 10 debt) = 0
+  });
+
+  test("debt does not grow past 3*daily_target after already reaching the cap", () => {
+    // User already at cap (60 = 3 * 20). Another missed day should not add.
+    const user = createUser("capped", "hash", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
+    updateTarget(user.id, 20);
+    updateDebt(user.id, 60);
+    logPushups(user.id, 1, "manual", "manual", "2026-04-06T14:00:00Z");
+    processExpiredBoundaries("2026-04-07T12:00:00Z");
+    expect(getUserById(user.id)!.debt).toBe(60);
+  });
+
+  test("streak grows past 5 days (no longer derived from last5 buffer)", () => {
+    // Previously the streak was rebuilt from last5 (5-char buffer) and
+    // capped at 5. Now it increments from the stored value directly.
+    const user = createUser("longrun", "hash", "America/New_York", "2026-04-07T11:00:00.000Z", "DEV0");
+    updateTarget(user.id, 20);
+    // Simulate 7 met days by repeatedly logging at target and advancing
+    // the boundary once per day. Using "now" past each successive boundary.
+    let boundaryNow = "2026-04-07T12:00:00Z";
+    for (let i = 0; i < 7; i++) {
+      const dayDate = new Date(new Date("2026-04-06T14:00:00Z").getTime() + i * 86400000).toISOString();
+      logPushups(user.id, 20, "manual", "manual", dayDate);
+      processExpiredBoundaries(boundaryNow);
+      // Next rollup happens a day later
+      boundaryNow = new Date(new Date(boundaryNow).getTime() + 86400000).toISOString();
+    }
+    const updated = getUserById(user.id)!;
+    expect(updated.streak).toBe(7);
+    // last5 still trims to the last 5 days
+    expect(updated.last5.split(',').length).toBe(5);
   });
 
   // --- day icon plurality rule ---

@@ -136,6 +136,12 @@ export async function handleApiRequest(req: Request): Promise<Response> {
     if (typeof target !== "number" || target < 20) {
       return json({ error: "Target must be at least 20" }, 400);
     }
+    // Debt gate: changing target while in debt would let a user escape
+    // their hole by lowering the target to whatever they already did.
+    // Clear debt first.
+    if (user.debt > 0) {
+      return json({ error: `Clear your ${user.debt} pushup debt before changing target` }, 400);
+    }
     updateTarget(user.id, target);
     return json({ ok: true, daily_target: target });
   }
