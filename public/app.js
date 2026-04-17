@@ -524,7 +524,7 @@ function renderDashboard(app, data) {
       </div>
       ${remainingDebt > 0 ? `
       <div class="debt-card">
-        <div><div style="font-size:11px;text-transform:uppercase;color:var(--text-dim)">Debt</div><div class="debt-count">${remainingDebt}</div></div>
+        <div><div style="font-size:11px;text-transform:uppercase;color:var(--text-dim)">Debt</div><div class="debt-count">${remainingDebt}${data.debt >= data.daily_target * 3 ? ' <span class="debt-max">MAX</span>' : ''}</div></div>
         <div class="debt-label">pushups<br>owed</div>
       </div>` : ''}
       <div style="display:flex;gap:10px;margin-top:16px">
@@ -634,7 +634,7 @@ function renderDashboard(app, data) {
               <div class="team-member-header">
                 <div>
                   <div class="member-name">${m.username}</div>
-                  <div class="member-target">${!m.ever_logged ? '<span style="font-size:11px;color:var(--text-dim)">not started</span>' : `${leftText}${mRemainingDebt > 0 ? `<span style="font-size:11px;color:var(--danger);margin-left:${hasLeftText ? '4' : '0'}px">(${mRemainingDebt} debt)</span>` : ''}`}</div>
+                  <div class="member-target">${!m.ever_logged ? '<span style="font-size:11px;color:var(--text-dim)">not started</span>' : `${leftText}${mRemainingDebt > 0 ? `<span style="font-size:11px;color:var(--danger);margin-left:${hasLeftText ? '4' : '0'}px">(${mRemainingDebt} debt${m.debt >= m.daily_target * 3 ? ' <span class="debt-max-inline">MAX</span>' : ''})</span>` : ''}`}</div>
                 </div>
                 <div class="team-member-right">
                   <div class="member-progress ${statusClass}">${display}</div>
@@ -783,13 +783,22 @@ function showSettings() {
 
   overlay.querySelector('#set-save').addEventListener('click', async () => {
     const target = parseInt(overlay.querySelector('#set-target').value) || 0;
-    if (target < 20) { document.getElementById('target-error').style.display = ''; return; }
-    document.getElementById('target-error').style.display = 'none';
-    await api('PUT', '/api/me/target', { target });
-    currentUser.daily_target = target;
-    overlay.remove();
-    showToast('Target updated');
-    await loadDashboard();
+    const err = document.getElementById('target-error');
+    if (target < 20) { err.textContent = 'Minimum target is 20'; err.style.display = ''; return; }
+    err.style.display = 'none';
+    try {
+      await api('PUT', '/api/me/target', { target });
+      currentUser.daily_target = target;
+      overlay.remove();
+      showToast('Target updated');
+      await loadDashboard();
+    } catch (e) {
+      // Debt-gate rejection (or any other 400) — surface the server's
+      // message in the field error slot so it persists instead of
+      // flashing as a transient toast.
+      err.textContent = (e && e.message) ? e.message : 'Could not update target';
+      err.style.display = '';
+    }
   });
   overlay.querySelector('#set-logout').addEventListener('click', async () => {
     await api('POST', '/api/auth/logout');

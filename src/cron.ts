@@ -95,21 +95,33 @@ export function processExpiredBoundaries(nowUtc: string): void {
       days.push(dayIcon);
       if (days.length > 5) days.shift();
       const newLast5 = days.join(',');
-      // Streak: count consecutive met days from the end
-      let newStreak = 0;
-      for (let j = days.length - 1; j >= 0; j--) {
-        if (days[j] === 'S' || days[j] === 'F' || days[j] === 'U') newStreak++;
-        else break;
-      }
+      // Streak: increment from the stored prior value on met days, reset to
+      // 0 on any miss. Previously this was derived from last5 (a 5-day ring
+      // buffer) so the stored streak was silently capped at 5 — a 30-day
+      // run would render as "5d" in the UI. last5 is kept strictly for the
+      // calendar icon feed now; user.streak is the source of truth for the
+      // unbounded streak count.
+      //
+      // No backfill for existing rows: users currently stored at 5 that were
+      // actually longer will resume counting from 5+1 forward. Explicitly
+      // chosen (no user was on a >5 run when this shipped).
+      const newStreak = met ? user.streak + 1 : 0;
       updateStreak(user.id, newLast5, newStreak);
 
       // Save to day_results for calendar (date = the day that just ended)
       const dayDate = DateTime.fromISO(prevBoundary, { zone: 'utc' }).setZone(user.timezone).toISODate();
       saveDayResult(user.id, dayDate!, met, dayIconToMode(dayIcon), todayTotal);
 
-      // Debt: add shortfall or reduce by surplus
+      // Debt: add shortfall (capped at 3 days' worth) or reduce by surplus.
+      // The 3-day cap prevents a week-long absence from producing an
+      // insurmountable hill on return — debt plateaus at 3*daily_target
+      // no matter how many days the user stays away.
+      const MAX_DEBT_MULTIPLIER = 3;
+      const debtCap = user.daily_target * MAX_DEBT_MULTIPLIER;
       if (shortfall > 0) {
-        updateDebt(user.id, shortfall);
+        const headroom = Math.max(0, debtCap - user.debt);
+        const add = Math.min(shortfall, headroom);
+        if (add > 0) updateDebt(user.id, add);
       } else if (met && user.debt > 0) {
         const surplus = todayTotal - user.daily_target;
         if (surplus > 0) {

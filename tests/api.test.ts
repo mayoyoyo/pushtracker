@@ -79,6 +79,22 @@ describe("api", () => {
       const me = await (await authedRequest("GET", "/api/me", token)).json();
       expect(me.daily_target).toBe(50);
     });
+
+    test("rejects target change while user has debt", async () => {
+      // Give the session's user some debt, then try to change target. Must
+      // resolve the session's underlying user id the same way handleApiRequest
+      // does — the authedRequest helper talks to a cookie-bearing user whose
+      // id we can look up via /api/me.
+      const me = await (await authedRequest("GET", "/api/me", token)).json();
+      updateDebt(me.id, 40);
+      const res = await authedRequest("PUT", "/api/me/target", token, { target: 99 });
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.error).toMatch(/debt/i);
+      // Target should remain at the pre-call value (20 from signup default).
+      const me2 = await (await authedRequest("GET", "/api/me", token)).json();
+      expect(me2.daily_target).toBe(20);
+    });
   });
 
   describe("GET /api/me/lifetime", () => {
