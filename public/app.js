@@ -524,7 +524,7 @@ function renderDashboard(app, data) {
       </div>
       ${remainingDebt > 0 ? `
       <div class="debt-card">
-        <div><div style="font-size:11px;text-transform:uppercase;color:var(--text-dim)">Debt</div><div class="debt-count">${remainingDebt}${data.debt >= data.daily_target * 3 ? ' <span class="debt-max">MAX</span>' : ''}</div></div>
+        <div><div style="font-size:11px;text-transform:uppercase;color:var(--text-dim)">Debt</div><div class="debt-count">${remainingDebt}${remainingDebt >= data.daily_target * 3 ? ' <span class="debt-max">MAX</span>' : ''}</div></div>
         <div class="debt-label">pushups<br>owed</div>
       </div>` : ''}
       <div style="display:flex;gap:10px;margin-top:16px">
@@ -634,7 +634,7 @@ function renderDashboard(app, data) {
               <div class="team-member-header">
                 <div>
                   <div class="member-name">${m.username}</div>
-                  <div class="member-target">${!m.ever_logged ? '<span style="font-size:11px;color:var(--text-dim)">not started</span>' : `${leftText}${mRemainingDebt > 0 ? `<span style="font-size:11px;color:var(--danger);margin-left:${hasLeftText ? '4' : '0'}px">(${mRemainingDebt} debt${m.debt >= m.daily_target * 3 ? ' <span class="debt-max-inline">MAX</span>' : ''})</span>` : ''}`}</div>
+                  <div class="member-target">${!m.ever_logged ? '<span style="font-size:11px;color:var(--text-dim)">not started</span>' : `${leftText}${mRemainingDebt > 0 ? `<span style="font-size:11px;color:var(--danger);margin-left:${hasLeftText ? '4' : '0'}px">${hasLeftText ? '· ' : ''}${mRemainingDebt} debt${mRemainingDebt >= m.daily_target * 3 ? ' <span class="debt-max-inline">MAX</span>' : ''}</span>` : ''}`}</div>
                 </div>
                 <div class="team-member-right">
                   <div class="member-progress ${statusClass}">${display}</div>
