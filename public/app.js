@@ -718,7 +718,10 @@ function showManualEntry() {
   inputEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') inputEl.blur(); });
 
   overlay.querySelector('#step-cancel').addEventListener('click', () => overlay.remove());
-  overlay.querySelector('#step-save').addEventListener('click', async () => {
+  overlay.querySelector('#step-save').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    if (btn.disabled) return;
+    btn.disabled = true;
     if (inputEl.style.display !== 'none') { const v = parseInt(inputEl.value); if (v > 0) count = v; }
     await api('POST', '/api/pushups', { count, source: 'manual' });
     overlay.remove();
@@ -1115,7 +1118,10 @@ async function renderCamera(app) {
       if (stream) stream.getTracks().forEach(t => t.stop());
     }
 
-    document.getElementById('cam-stop').addEventListener('click', async () => {
+    document.getElementById('cam-stop').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      if (btn.disabled) return;
+      btn.disabled = true;
       const count = tracker ? tracker.getCount() : 0;
       stopCamera();
       if (count > 0) {
